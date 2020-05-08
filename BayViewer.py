@@ -8,7 +8,32 @@ import openpyxl
 from openpyxl import load_workbook
 import webbrowser
 
+class Chamber:
+    def __init__ (self, system, po):
+        self.system = system
+        self.po = po
 
+    def __str__(self):
+        return 'System #:{}, PO #: {}'.format(self.system,self.po)
+
+    def print(self):
+        print(self.system + " " + self.po)
+
+file = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\PO#.xlsx'
+data = pd.read_excel(file, dtype=str)
+df = pd.DataFrame(data, columns= ['SYSTEM', 'CH PO'])
+chambers = []
+
+for x in range(0,120,2):
+    if "EMPTY" in str(df.at[(x), 'SYSTEM']):
+        system_num = None
+        po_num = None
+    else:
+        system_num = df.at[x, 'SYSTEM']
+        po_num = df.at[x, 'CH PO']
+    chambers.append(Chamber(system_num, po_num))
+
+chrome = "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s"
 chamber_locations = [1,1,1,1,1,1]
 active_buttons = []
 ports = ["A","B","C","D","E","F"]
@@ -44,7 +69,7 @@ while True:
         else:
             print("That\'s not a real bay, try again.")
 
-data = pd.read_excel(file)#r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\SUPERVISOR PASSDOWN\LEADS Passdown\LEADS PASSDOWN ' + d + 'Nite.xlsx')
+data = pd.read_excel(file)
 df = pd.DataFrame(data, columns= ['Bay ','System #', 'Status Of Chamber', 'Passdown Issues','START Date','Port Days'])
 def find_chamber_locations(bay):
     global chamber_locations
@@ -62,13 +87,15 @@ chamber_locations = find_chamber_locations(bay_num)
 print("printing occupied ports")
 print(chamber_locations)
 
-##def close_window(self):
-##    self.destroy()
-
 
 def openqn(system):
-    chrome = "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s"
-    webbrowser.get(chrome).open_new_tab("http://dca-wb-263/QM/QM/ViewQN?SlotNum=B00794&ProdOrder=")
+    #chrome = "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s"
+    webbrowser.get(chrome).open_new_tab("http://dca-wb-263/QM/QM/ViewQN?SlotNum=" + str(system) + "&ProdOrder=")
+
+def opentlc(po):
+    webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/laborcosting")
+
+    
 
 def create_window_Generic(x):
     window =tk.Toplevel(root)
@@ -89,7 +116,13 @@ def create_window_Generic(x):
     StartDatelabel.pack()
     PortDayslabel = tk.Label(window, text = "Port days: " + str(df.at[x + (6 * (bay_num - 1)),'Port Days']))
     PortDayslabel.pack()
-##    qn_button = tk.Label(window, text = "view qns", command = (lambda: openqn(1))
+    ###############
+    system = df.at[x + (6 * (bay_num - 1)),'System #']
+    qn_button = tk.Button(window, text = "view qns", command = (lambda: openqn(system.split('-', 1)[0])))
+    qn_button.pack()
+    tlc_button = tk.Button(window, text = "TLC", command = (lambda: opentlc(chambers[x + (6 * (bay_num - 1))].po)))
+    tlc_button.pack()
+    ################
     quit_buttonGeneric = tk.Button(window, text = "quit", command = window.destroy)
     quit_buttonGeneric.pack(side = "left")
     window.focus_set()                                                        
@@ -97,21 +130,15 @@ def create_window_Generic(x):
 
 def change_bay(root, chamber_image, new_bay, entry, active_buttons):
     global chamber_locations, bay_num_str, bay_num
-    #global bay_num_str
-    #global bay_num
     entry.delete('0', 'end')
-    #global chamber_locations
     delete_buttons()
-    #global bay_num_str
     bay_num_str = new_bay
-    #global bay_num
     bay_num = int(bay_num_str)
     chamber_locations = find_chamber_locations(bay_num)
     create_buttons(root, chamber_image, chamber_locations, active_buttons)
 
 def delete_buttons():
     global active_buttons, chamber_locations
-    #global chamber_locations
     x = 0
     for x in active_buttons:
         x.destroy()
@@ -176,3 +203,4 @@ create_buttons(root, chamber_image, chamber_locations, active_buttons)
     
 
 root.mainloop()
+
