@@ -22,13 +22,17 @@ for row in ws.rows:
     if row[0].value == "B01198":
         for x in range(8,12):
             if row[x].value == "NA":
-                print("There is no EQRK #" + str(x - 7))
+                print("There is no EQRK #" + str(x - 7) + "\n")
             elif row[x].value == None:
-                print("EQRK #" + str(x - 7) + " is not ready")
+                print("EQRK #" + str(x - 7) + " is not ready, needed for:")
+                x = str(row[x].comment)
+                y = x.find('CH')
+                z = x.find('by')
+                print(x[y:z-1] + "\n")
             else:
                 print("EQRK #" + str(x - 7) + " is complete for:")
                 #print(row[x].value)
                 x = str(row[x].comment)
                 y = x.find('CH')
                 z = x.find('by')
-                print(x[y:z-1])
+                print(x[y:z-1] + "\n")
