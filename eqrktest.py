@@ -19,7 +19,7 @@ wb = load_workbook(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\T
 ws = wb["Sheet1"]
 
 for row in ws.rows:
-    if row[0].value == "B01173":
+    if row[0].value == "B01198":
         for x in range(8,12):
             if row[x].value == "NA":
                 print("There is no EQRK #" + str(x - 7) + "\n")
@@ -37,6 +37,6 @@ for row in ws.rows:
                 z = x.find('by')
                 print(x[y:z-1] + "\n")
         try:
-            print("Comments: " + str(row[12].value))
+            print("Comments: " + row[12].value)
         except:
             pass
