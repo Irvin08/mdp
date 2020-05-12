@@ -1,10 +1,9 @@
-####################################################################################################################
-############## BIG BUG NEED TO CHECK DATES ON LAST TEST RAN NOT ON LAST LINE########################################
-#####################################################################################################################
+#import time
 
 while True:
     try:
-        bay_num = int(input("Enter bay: "))
+        bay = input("Enter bay: ")
+        bay_num = int(bay)
     except ValueError:
         print("That's not a number dude")
     else:
@@ -21,11 +20,11 @@ while True:
         else:
             print("Only ports A-F are available.")
 
-mlog = r'\\port8' + port + r'\Temp\automation\logs\Mayan.log'
-elog = r'\\port8' + port + r'\Temp\automation\logs\MayanExecutive.log'
-######################################################################
+mlog = r'\\port' + bay + port + r'\Temp\automation\logs\Mayan.log'
+elog = r'\\port' + bay + port + r'\Temp\automation\logs\MayanExecutive.log'
 
-configfile = r'\\port8' + port + r'\Amat\EnduraCGA\Data\Config.en'
+#May need to modify this for centura chambers
+configfile = r'\\port'+ bay + port + r'\Amat\EnduraCGA\Data\Config.en'
 
 class Chamber:
     def _init_(self, kind, position):
@@ -37,38 +36,8 @@ class Chamber:
 
     def print(self):
         print(self.kind + " " + self.position)
-#####################################################################
 
-with open(mlog, 'rb') as fh:
-    firstlog = next(fh).decode()
-    fh.seek(-1024, 2)
-    lastlog = fh.readlines()[-1].decode()
-    logdate = lastlog[0:9]
-    print(logdate)
-
-with open(elog, 'rb') as fh:
-    firstelog = next(fh).decode()
-    fh.seek(-1024, 2)
-    lastelog = fh.readlines()[-1].decode()
-    elogdate = lastelog[0:9]
-    print(elogdate)
-
-if logdate > elogdate:
-    print("mlog is more recent")
-    log = open(mlog, 'r')
-    usingelog = False
-else:
-    print("elog is more recent")
-    log = open(elog, 'r')
-    usingelog = True
-
-lines = log.readlines()
-log.close()
-reversed_lines = reversed(lines)
-reversed_log = []
-reversed_elog = []
-#########################################################
-
+#Read chamber description lines to find current chamber
 config = open(configfile, 'r')
 lines = []
 with open(configfile) as config:
@@ -79,27 +48,53 @@ C = Chamber()
 for x in head[5:]:
     if "Absent" in x:
         continue
-        #print("no chamber configured")
     else:
         C.kind = x[(x.find("=") + 1):x.find("	")]
         y = x.find("@_") + 2
         C.position = x[y:(y + 3)]
         C.print()
+lines.clear()
 
-########################################################
-for i in reversed_lines:
-    reversed_log.append(i)
+#Stopwatch to see how long the reversing of logs takes
+#starttime = time.time()
 
-if usingelog == True:
-    for i in reversed_log:
+#Read logs and reverse them since latest test data is at end
+log = open(mlog, 'r')
+lines = log.readlines()
+log.close()
+reversed_lines = reversed(lines)
+reversed_log = []
+for i in range(0,200):#reversed_lines:
+    reversed_log.append(next(reversed_lines))#reversed_log.append(i)
+
+xlog = open(elog, 'r')
+xlines = xlog.readlines()
+xlog.close()
+reversed_xlines = reversed(xlines)
+reversed_xlog = []
+for i in range(0,200):# reversed_xlines:
+    reversed_xlog.append(next(reversed_xlines))#reversed_xlog.append(i)
+
+#print("--- %s seconds ---" % (time.time() - starttime))
+
+#Find latest test run/passed on both logs and print out most recent
+for i in reversed_log:
+    if "Run Test" in i:
+        last_test = "Last test ran: '" + i[(i.find("Run Test")+10):-1] + "' at " + i[0:20]
+        logdate = i[0:9]
+        print(logdate)
+        break
+
+for i in reversed_xlog:
         if "Test Passed" in i:
-            print("last test ran: " + i[i.find("'"):-1] + " at " + i[0:20]) #implement find ' and start there
+            last_xtest = "Last test ran: " + i[i.find("'"):-1] + " at " + i[0:20]
+            elogdate = i[0:9]
+            print(elogdate)
             break
 
+if logdate > elogdate:
+    print(last_test)
 else:
-    for i in reversed_log:
-        if "Run Test" in i:
-            print("Last test ran: '" + i[(i.find("Run Test")+10):-1] + "' at " + i[0:20])
-            break
+    print(last_xtest)
 
-print("found last test attempted")
+
