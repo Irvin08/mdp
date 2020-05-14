@@ -20,10 +20,11 @@ import win32com.client as win32
 wb = load_workbook(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\EQRK Status.xlsx')
 ws = wb["Sheet1"]
 def printStatus(system):
-    for row in ws.rows:
+    rows = ws.iter_rows(ws.max_row - 100, ws.max_row)
+    for row in rows:
         if row[0].value == system:
             for x in range(8,12):
-                if row[x].value == "NA":
+                if "NA" in str(row[x].value):
                     print("There is no EQRK #" + str(x - 7) + "\n")
                 elif row[x].value == None:
                     print("EQRK #" + str(x - 7) + " is not ready, needed for:")
@@ -42,7 +43,6 @@ def printStatus(system):
                 print("Comments: " + row[12].value)
             except:
                 pass
-
-system = input("Enter system: ")
-#maybe add a way to be able to input lowercase too
-printStatus(system)
+while(input != "STOP"):
+    system = input("Enter system: ").upper()
+    printStatus(system)
