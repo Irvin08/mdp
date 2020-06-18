@@ -20,15 +20,13 @@ d = datetime.today().strftime('%#Y  %#m-%#d')
 d2 = (datetime.today() - timedelta(1)).strftime('%#Y  %#m-%#d')
 try:
     crossoverChecklist = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\SUPERVISOR PASSDOWN\( DTF Checklists for Systems )\( TEST QUEUE - Checklist Forms - Pics )\TEST QUEUE ' + d + ' Day_.xlsx'
-    print("days_" + d)
 except FileNotFoundError:
     pass
+
 try:
     crossoverChecklist = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\SUPERVISOR PASSDOWN\( DTF Checklists for Systems )\( TEST QUEUE - Checklist Forms - Pics )\TEST QUEUE ' + d + ' Day.xlsx'
-    print("days" + d)
 except FileNotFoundError:
     crossoverChecklist = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\SUPERVISOR PASSDOWN\( DTF Checklists for Systems )\( TEST QUEUE - Checklist Forms - Pics )\TEST QUEUE ' + d2 + ' Night.xlsx'
-    print("nights" + d2)
     
 #From test queue excel file, make a dataframe that includes location, slot#, chamber PO#, and chamber type
 data = pd.read_excel(crossoverChecklist, sheet_name= 'QUEUE', usecols = 'E:H', dtype=str, skiprows = 3)
