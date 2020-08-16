@@ -34,12 +34,13 @@ import time
 
 
 class Chamber:
-    def __init__ (self, system, chamberPO, ctvPO, gpPO, chType):
+    def __init__ (self, system, chamberPO, ctvPO, gpPO, chType, portIdx):
         self.system = system
         self.chPO = chamberPO
         self.ctvPO = ctvPO
         self.gpPO = gpPO
         self.chType = chType
+        self.portIdx = portIdx
         self.gpQNs = []
         self.ctvQNs = []
         self.QNs = []
@@ -213,16 +214,23 @@ def printStatus(system):
     quit_button_rack.pack(side = "left")
     window.focus_set()                                                        
     window.grab_set()
-
+    
+#maybe add build %
 def getPOs(chambers):
     global dfCrossover
     global df
+    global dfManual
+    manualPOs = load_workbook(manualPOsFile)
+    ws = manualPOs.active
+    rows = list(ws.rows)
+    global manualRows
     for x in range(0, 60):
         skip = False
+        done = False
         y = df.at[x, 'System #']
         y = y.replace(" ", "")
         if y == "EMPTY":
-            chambers.append(Chamber("XXXXX-X", "XXXXX", "XXXXX", "XXXXX", "XXXXX"))
+            chambers.append(Chamber("XXXXX-X", "XXXXX", "XXXXX", "XXXXX", "XXXXX", x))
             skip = True
         if not skip:
             z = y.find('-')
@@ -231,27 +239,30 @@ def getPOs(chambers):
             if "D01" in y:
                 try:
                     r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '] == y]
-                    chambers.append(Chamber(y, r.values[0,1], "XXXXX", "XXXXX", r.values[0,2]))
+                    chambers.append(Chamber(y, r.values[0,1], "XXXXX", "XXXXX", r.values[0,2], x))
                 except IndexError:
                     y = y.replace("D01", "")
                     r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '] == y]
-                    chambers.append(Chamber(y, r.values[0,1], "XXXXX", "XXXXX", r.values[0,2]))
+                    chambers.append(Chamber(y, r.values[0,1], "XXXXX", "XXXXX", r.values[0,2], x))
             else:
                 try:
                     r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '] == y]
-                    chambers.append(Chamber(y, r.values[0,1], "XXXXX", "XXXXX", r.values[0,2]))
+                    po = r.values[0,1]
+                    chtype = r.values[0,2]
+                    found = True
                 except IndexError:
-                    found = False
-                    manualPOs = load_workbook(manualPOsFile)
-                    ws = manualPOs.active
-                    for row in ws.rows:
-                        if row[0].value == y:
-                            found = True
-                            print([cell.value for cell in row])
-                            chambers.append(Chamber(*[cell.value for cell in row]))
-                            break
-                    if found == False:
-                        chambers.append(Chamber(y, "XXXXX", "XXXXX", "XXXXX", "XXXXXX"))
+                    pass
+            r = rows[x + 1]
+            if r[1].value == y:
+                init = [y, po, None, None, chtype, x]
+                z = [cell.value for cell in r]
+                for i in range(1,6):
+                    if z[i]:
+                        init[i-1] = z[i] 
+                chambers.append(Chamber(*init))
+                done = True
+            if not done:
+                chambers.append(Chamber(y, po, "XXXXX", "XXXXX", chtype, x)) if found else chambers.append(Chamber(y, "XXXXX", "XXXXX", "XXXXX", "XXXXXX", x))
                 
 
 def getPriorityColors(file, cells):
@@ -330,8 +341,15 @@ def create_window_Generic(x):
     Portlabel = tk.Label(window, text = "Port: " + bay_num_str + ports[x])
     Portlabel.grid(row = 1, column = 1, columnspan = 2, sticky = "nsew")#pack()
     system = df.at[x + (6 * (bay_num - 1)),'System #']
-    Systemlabel = tk.Label(window, text = "System #: " + system)
-    Systemlabel.grid(row = 2, column = 1, columnspan = 2, sticky = "nsew")#pack()
+    systemEntry = tk.Text(window, height = 1, width = 25, borderwidth = 0)
+    systemEntry.insert(1.0, system)
+    systemEntry.tag_configure("center", justify='center')
+    systemEntry.tag_add("center", "1.0", "end")
+    systemEntry.configure(state="disabled")
+    systemEntry.configure(bg=window.cget('bg'), relief="flat")
+    systemEntry.grid(row = 2, column = 1, columnspan = 2, sticky = "nsew")
+    #Systemlabel = tk.Label(window, text = "System #: " + system)
+    #Systemlabel.grid(row = 2, column = 1, columnspan = 2, sticky = "nsew")
     system = system[0 : system.find("-")]
     #
     chTypeText = chamber.chType if chamber.chType is not None else "No chamber type found"
@@ -387,14 +405,19 @@ def create_window_Generic(x):
 ##        gpQNButton.pack()
     if chamberPO is not None:
         tlc_button = tk.Button(window, text = "Add TLC to chamber", command = (lambda: opentlc(chamberPO)))#chambers[x + (6 * (bay_num - 1))].po)))
-        tlc_button.grid(row = 11, column = 1, sticky = "nsew")#pack()
+        tlc_button.grid(row = 11, column = 1, sticky = "nsew")
     checkUserTLCButton = tk.Button(window, text = "View today's TLC", command = (lambda: openUserTLC()))
-    checkUserTLCButton.grid(row = 11, column = 2, sticky = "nsew")#pack()
-    updateSystemNumButton = tk.Button(window, text = "Update System #", command = (lambda: openUpdateSystemNumWindow()))
-    updateSystemNumButton.grid(row = 12, column = 1, columnspan = 2, sticky = "nsew")#pack()
-    
+    checkUserTLCButton.grid(row = 11, column = 2, sticky = "nsew")
+
     checkRackStatusButton = tk.Button(window, text = "Check ERack for this system", command = (lambda: printStatus(system)))
-    checkRackStatusButton.grid(row = 13, column = 1, columnspan = 2, sticky = "nsew")#pack()
+    checkRackStatusButton.grid(row = 12, column = 1, columnspan = 2, sticky = "nsew")#pack()
+    
+    updateSystemNumEntry = tk.Entry(window)
+    updateSystemNumEntry.grid(row = 13, column = 1, sticky = "nsew")
+    updateSystemNumButton = tk.Button(window, text = "Update System #", command = (lambda: setNewPO(chamber, updateSystemNumEntry, systemEntry, 0)))
+    updateSystemNumButton.grid(row = 13, column = 2, sticky = "nsew")
+    
+    
     updateChPOEntry = tk.Entry(window)
     updateChPOEntry.grid(row = 14, column = 1, sticky = "nsew")
     updateChPOButton = tk.Button(window, text = "Update Chamber PO", command = (lambda: setNewPO(chamber, updateChPOEntry, POEntry, 1)))
@@ -408,12 +431,20 @@ def create_window_Generic(x):
     updateGPPOEntry.grid(row = 16, column = 1, sticky = "nsew")
     updateGPPOButton = tk.Button(window, text = "Update Gas Panel PO", command = (lambda: setNewPO(chamber, updateGPPOEntry, gpPOEntry, 3)))
     updateGPPOButton.grid(row = 16, column = 2, columnspan = 2, sticky = "nsew")
+    createY7Button = tk.Button(window, text = "Create Y7", command = (lambda: createQN(chamberPO, chamber.system, "Y7")))
+    createY7Button.grid(row = 17, column = 1, sticky = "nsew")
+    createY8Button = tk.Button(window, text = "Create Y8", command = (lambda: createQN(chamberPO, chamber.system, "Y8")))
+    createY8Button.grid(row = 17, column = 2, sticky = "nsew")
+    iomsButton = tk.Button(window, text = "Go to iOMS", command = (lambda: webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + chamberPO + "#!/")))
+    iomsButton.grid(row = 18, column = 1, columnspan = 4, sticky = "nsew")
+    create3DButton = tk.Button(window, text = "Create new 3D form", command = (lambda: webbrowser.get(chrome).open_new_tab("http://sppartner/sites/Global3D/Lists/VMORevision/Item/newifs.aspx")))
+    create3DButton.grid(row = 19, column = 1, columnspan=4, sticky = "nsew")
     
     quit_buttonGeneric = tk.Button(window, text = "quit", command = window.destroy)
-    quit_buttonGeneric.grid(row = 17, column = 0, columnspan = 4, sticky = "nsew")#pack(side = "left")
+    quit_buttonGeneric.grid(row = 20, column = 0, columnspan = 4, sticky = "nsew")#pack(side = "left")
     window.focus_set()                                                        
     window.grab_set()
-
+#http://dca-wb-263/QM/QM/CreateQN?prodId=1552105&qntype=Y8&slotno=B01487&plant=4070&source=PROMPT
 
 def change_bay(root, chamber_image, new_bay, entry, active_buttons, currentBayLabel):
     global chamber_locations, bay_num_str, bay_num
@@ -489,47 +520,52 @@ def updateQN(po, ch, viewQNs, qnIdx):
     DRIVER_PATH = r"./driver/chromedriver.exe"
     driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
     driver.get("http://dca-wb-263/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
-##    try:
-    e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
-    ch.QNs.clear()
-    rows = driver.find_elements_by_class_name("ui-grid-row")
-    for r in rows:
-        posPartNums = []
-        qnnum = r.find_element_by_css_selector('a.ng-binding').text
-        qnType = r.find_element_by_class_name('ui-grid-coluiGrid-000K').text
-        shortText = r.find_element_by_class_name('ui-grid-coluiGrid-000L').text
-        status = not r.find_element_by_xpath('.//input[@type="checkbox"]').is_selected()
-        partNum = r.find_element_by_class_name('ui-grid-coluiGrid-000M').text
-        if qnIdx == 0:
-            if status:
-                print(partNum)
-                PN = fnmatch.filter(partNum.split(), '????-?????')
-                print(PN)
-                if PN:
-                    partNum = PN
-                    ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
-                    continue
-                else:
-                    PNReg = re.compile(r'\d{4}-\d{5}')
-                    foundPN = PNReg.search(shortText)
-                    if foundPN:
-                        print(qnnum)
-                        print(foundPN.group())
-                        partNum = foundPN.group()
+    try:
+        e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+        ch.QNs.clear()
+        rows = driver.find_elements_by_class_name("ui-grid-row")
+        for r in rows:
+            posPartNums = []
+            qnnum = r.find_element_by_css_selector('a.ng-binding').text
+            qnType = r.find_element_by_class_name('ui-grid-coluiGrid-000K').text
+            shortText = r.find_element_by_class_name('ui-grid-coluiGrid-000L').text
+            status = not r.find_element_by_xpath('.//input[@type="checkbox"]').is_selected()
+            partNum = r.find_element_by_class_name('ui-grid-coluiGrid-000M').text
+            if qnIdx == 0:
+                if status:
+                    print(partNum)
+                    PN = fnmatch.filter(partNum.split(), '????-?????')
+                    print(PN)
+                    if PN:
+                        partNum = PN
                         ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
                         continue
-            ch.QNs.append(QN(qnnum, qnType, shortText, status))
-        elif qnIdx == 1:
-            ch.ctvQNs.append(QN(qnnum, qnType, shortText, status))
-        else:
-            ch.gpQNs.append(QN(qnnum, qnType, shortText, status))
-    driver.quit()
-##    except:
-##        driver.quit()
-##        ch.allQNs[qnIdx].clear()
+                    else:
+                        PNReg = re.compile(r'\d{4}-\d{5}')
+                        foundPN = PNReg.search(shortText)
+                        if foundPN:
+                            print(qnnum)
+                            print(foundPN.group())
+                            partNum = foundPN.group()
+                            ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
+                            continue
+                ch.QNs.append(QN(qnnum, qnType, shortText, status))
+            elif qnIdx == 1:
+                ch.ctvQNs.append(QN(qnnum, qnType, shortText, status))
+            else:
+                ch.gpQNs.append(QN(qnnum, qnType, shortText, status))
+        driver.quit()
+    except:
+        driver.quit()
+        ch.allQNs[qnIdx].clear()
     if viewQNs:
         viewQN(ch, True, qnIdx)
 
+def createQN(po, system, qnType):
+    x = system.find("-")
+    system = system[0:x]
+    print(system)
+    webbrowser.get(chrome).open_new_tab("http://dca-wb-263/QM/QM/CreateQN?prodId=" + po + "&qntype=" + qnType +"&slotno=" + system + "&plant=4070&source=PROMPT")
 
 def openQN(qn):
     webbrowser.get(chrome).open_new_tab("https://epvpwd.amat.com:8065/com.amat.irj.portal?app=ChgQaNotif?RIWO00-QMNUM=0000" + qn)
@@ -622,7 +658,6 @@ def opentlc(po):
     DRIVER_PATH = r"./driver/chromedriver.exe"
     driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
     driver.get("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/laborcosting")
-#laborcosting > div > div > div > div > div:nth-child(6) > div.col-md-5.col-sm-6 > div > button:nth-child(1)
     time.sleep(15)
     but = WebDriverWait(driver, 35).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#laborcosting > div > div > div > div > div:nth-child(6) > div.col-md-5.col-sm-6 > div > button:nth-child(1) > span')))
     print("is clickable")
@@ -662,23 +697,26 @@ def setNewPO(ch, new, old, poType):
     new.delete('0', 'end')
     t = ("Chamber PO: " if poType == 1 else ("CTV PO: " if poType == 2 else "GP PO: ")) + po
     old.insert(1.0, t)
+    old.tag_configure("center", justify='center')
+    old.tag_add("center", "1.0", "end")
     old.configure(state="disabled")
     manualPOsFile = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx'
     manualPOs = load_workbook(manualPOsFile)
     ws = manualPOs.active
     found = False
-    for row in ws.rows:
-        if row[0].value == ch.system:
-            found = True
-            row[poType].value = po
-            manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx')
-            break
-    if found == False:
-        nextRow = ws.max_row+1
-        ws.cell(column=1, row=nextRow, value=ch.system)
-        ws.cell(column=3, row=nextRow, value=po)
+    rows = list(ws.rows)
+    r = rows[ch.portIdx + 2]
+    if r[1].value == ch.system:
+        found = True
+        r[poType + 2].value = po
         manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx')
-    if poType == 1:
+    if found == False:
+        ws.cell(column=2, row=ch.portIdx + 2, value=ch.system)
+        ws.cell(column=(poType + 2), row=ch.portIdx + 2, value=po)
+        manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx')
+    if poType == 0:
+        ch.system = po
+    elif poType == 1:
         ch.chPO = po
     elif poType == 2:
         ch.ctvPO = po
@@ -721,6 +759,7 @@ rackStatusSheet = rackStatus["Sheet1"]
 manualPOsFile = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx'
 passdownPath = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\SUPERVISOR PASSDOWN\LEADS Passdown\LEADS PASSDOWN*.xlsx'
 crossoverPath = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\SUPERVISOR PASSDOWN\( DTF Checklists for Systems )\(TEST QUEUE )\TEST QUEUE*.xlsx'
+manualPOPath = (r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx')
 chrome = "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s"
 crossoverFile = getLatestFile(crossoverPath)
 print(crossoverFile)
@@ -740,6 +779,8 @@ getPriorityColors(passdownPath, cells)
 
 data = pd.read_excel(crossoverPath, sheet_name= 'QUEUE', usecols = 'F:H', dtype=str, skiprows = 4)
 dfCrossover = pd.DataFrame(data)
+data = pd.read_excel(manualPOPath, sheet_name = 'Sheet1', usecols = 'A:E', dtype = str)
+manualDF = pd.DataFrame(data)
 
 bay_num_str = "8"
 bay_num = 8
@@ -750,6 +791,7 @@ df = pd.DataFrame(data, columns= ['Bay ','System #', 'Status Of Chamber', 'Passd
 getPOs(chambers)
 chamber_locations = findChamberLocations(bay_num)
 print(chamber_locations)
+#manualRows = 
 root = tk.Tk()
 root.title("Bay Status")
 w = 1154
@@ -783,3 +825,4 @@ create_buttons(root, chamber_image, chamber_locations, active_buttons)
     
 
 root.mainloop()
+
