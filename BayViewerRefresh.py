@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from PIL import Image, ImageDraw
 import tkinter as tk
 from tkinter import *
+from tkinter import ttk
 from PIL import ImageTk
 import openpyxl
 from openpyxl import load_workbook
@@ -31,6 +32,7 @@ from selenium.webdriver.common.by import By
 import os
 import fnmatch
 import time
+import random
 
 
 class Chamber:
@@ -110,6 +112,7 @@ class QN:
         self.partNum = partNum
         self.dateClosed = None
         self.creator = None
+        self.lastScanned = None
         
     def isOpen(self):
         return self.isOpen
@@ -404,9 +407,9 @@ def create_window_Generic(x):
 ##        gpQNButton = tk.Button(window, text = "View gas panel QN's", command = (lambda: openqn(gpPO)))
 ##        gpQNButton.pack()
     if chamberPO is not None:
-        tlc_button = tk.Button(window, text = "Add TLC to chamber", command = (lambda: opentlc(chamberPO)))#chambers[x + (6 * (bay_num - 1))].po)))
+        tlc_button = tk.Button(window, text = "Auto add TLC to chamber", command = (lambda: addtlc(chamberPO)))#chambers[x + (6 * (bay_num - 1))].po)))
         tlc_button.grid(row = 11, column = 1, sticky = "nsew")
-    checkUserTLCButton = tk.Button(window, text = "View today's TLC", command = (lambda: openUserTLC()))
+    checkUserTLCButton = tk.Button(window, text = "Manually add TLC to chamber", command = (lambda: opentlc(chamberPO)))
     checkUserTLCButton.grid(row = 11, column = 2, sticky = "nsew")
 
     checkRackStatusButton = tk.Button(window, text = "Check ERack for this system", command = (lambda: printStatus(system)))
@@ -492,7 +495,7 @@ def updateBayQN(driver, po, ch):
             shortText = r.find_element_by_class_name('ui-grid-coluiGrid-000L').text
             status = not r.find_element_by_xpath('.//input[@type="checkbox"]').is_selected()
             partNum = r.find_element_by_class_name('ui-grid-coluiGrid-000M').text
-            if status and (qnType == "Y8"):
+            if status:# and (qnType == "Y8"):
                 print(partNum)
                 PN = fnmatch.filter(partNum.split(), '????-?????')
                 print(PN)
@@ -535,7 +538,6 @@ def updateQN(po, ch, viewQNs, qnIdx):
                 if status:
                     print(partNum)
                     PN = fnmatch.filter(partNum.split(), '????-?????')
-                    print(PN)
                     if PN:
                         partNum = PN
                         ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
@@ -545,8 +547,8 @@ def updateQN(po, ch, viewQNs, qnIdx):
                         foundPN = PNReg.search(shortText)
                         if foundPN:
                             print(qnnum)
-                            print(foundPN.group())
                             partNum = foundPN.group()
+                            print(partNum)
                             ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
                             continue
                 ch.QNs.append(QN(qnnum, qnType, shortText, status))
@@ -573,22 +575,20 @@ def openQN(qn):
 def viewQN(ch, onlyOpen, qnIdx):
     status = ""
     if onlyOpen:
-        status = "Open QN's for " + ch.system + ":\n------------------------------------------------------------\n"
+        status = "Open QN's for " + ch.system
     else:
-        status = "All QN's for " + ch.system + ":\n-----------------------------------------------------------------\n"
-    #status = ch.QNStatus(onlyOpen, status, qnIdx)
+        status = "All QN's for " + ch.system
     window = tk.Toplevel(root)
     qns_label = tk.Label(window, text = status)
     qns_label.pack()
     openQNs = ch.openQNs(qnIdx)
-    #numOpen = ch.numOpenQNs(qnIdx)
     numOpen = len(openQNs)
     if numOpen != 0:
         qnLinks = []
         texts = []
-        #print(numOpen)
         for i in range(numOpen):
-            #status2 = ch.QNStatus(onlyOpen, status, qnIdx)
+            separator = ttk.Separator(window, orient = HORIZONTAL)
+            separator.pack(side='top', fill='both', expand=True)
             texts.append(tk.Text(window, height = 2, borderwidth = 0))
             qnLinks.append(texts[i])
             qnLinks[i].tag_configure("center", justify='center')
@@ -600,19 +600,18 @@ def viewQN(ch, onlyOpen, qnIdx):
             qnLinks[i].insert(INSERT, openQNs[i].QNNum, hyperlink.add(lambda x = openQNs[i].QNNum: openQN(x)))
             qnLinks[i].insert(INSERT, " - " + openQNs[i].Desc.upper())
             qnLinks[i].configure(state="disabled")
-            if openQNs[i].partNum and (openQNs[i].Type == "Y8"):
-                ltsText = tk.Text(window, height = 1, borderwidth =0)
-                ltsText.tag_configure("center", justify='center')
-                ltsText.tag_add("center", "1.0", "end")
-                ltsText.configure(bg=window.cget('bg'), relief="flat")
-                ltsText.pack()
-                ltsButton = tk.Button(window, text="Check last scanned", command = (lambda text = ltsText: getLastScanned(ch.chPO, openQNs[i], text)))
+            ltsText = tk.Text(window, height = 1, borderwidth =0)
+            ltsText.tag_configure("center", justify='center')
+            ltsText.tag_add("center", "1.0", "end")
+            ltsText.configure(bg=window.cget('bg'), relief="flat")
+            ltsText.pack()
+            if openQNs[i].lastScanned:
+                ltsText.insert(INSERT, openQNs[i].lastScanned)
+            if openQNs[i].partNum and (openQNs[i].Type == "Y8" or openQNs[i].Type == "YI"):
+                ltsButton = tk.Button(window, text="Refresh last scanned", command = (lambda q = openQNs[i], text = ltsText: getLastScanned(ch.chPO, q, text)))
                 ltsButton.pack()
-                ltsText = tk.Text(window, height = 1, borderwidth =0)
-
     else:
         tk.Label(window, text = "No QN data").pack()
-    #print(i)
     quit_button_qns = tk.Button(window, text = "quit", command = window.destroy)
     quit_button_qns.pack(side = "left")
     window.focus_set()                                                        
@@ -621,8 +620,9 @@ def viewQN(ch, onlyOpen, qnIdx):
 
 
 def getLastScanned(po, qn, text):
+    print(qn.partNum)
     options = Options()
-    options.headless = True # set to False to see chrome window while running
+    options.headless = False # set to False to see chrome window while running
     options.add_argument("--window-size=1920,1200")
     DRIVER_PATH = r"./driver/chromedriver.exe"
     driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
@@ -632,9 +632,25 @@ def getLastScanned(po, qn, text):
     poEntry = driver.find_element_by_xpath('//*[@id="PO"]')
     poEntry.send_keys(po)
     partNumEntry = driver.find_element_by_xpath('//*[@id="PN"]')
+    print(qn.partNum)
     partNumEntry.send_keys(qn.partNum)
+
     driver.find_element_by_xpath('//*[@id="btnSearch"]/i').click()
-    time.sleep(5)
+    #time.sleep(2)
+    s = driver.page_source
+    def compare_source(driver):
+        try:
+            return s != driver.page_source
+        except:
+            pass
+    WebDriverWait(driver, 10).until(compare_source)
+    s = driver.page_source
+    WebDriverWait(driver, 20).until(compare_source)
+    s = driver.page_source
+    WebDriverWait(driver, 30).until(compare_source)
+##    print(driver.execute_script("return jQuery.active == 0"))
+##    time.sleep(5)
+##    print(driver.execute_script("return jQuery.active == 0"))
     try:
         WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
         row = driver.find_element_by_class_name("ui-grid-row")
@@ -642,45 +658,109 @@ def getLastScanned(po, qn, text):
         lastSeen = row.find_element_by_class_name("ui-grid-coluiGrid-000C").text
         loc = row.find_element_by_class_name("ui-grid-coluiGrid-000F").text
         driver.quit()
-        print("Last seen: " + lastSeen + " in " + loc)
+        print(str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc)
         text.delete('1.0', END)
-        text.insert(INSERT, ("Last seen: " + lastSeen + " in " + loc))
+        text.insert(INSERT, (str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc))
+        qn.lastScanned = (str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc)
     except:
         driver.quit()
         text.delete('1.0', END)
         text.insert(INSERT, "No Data Found")
+        qn.lastScanned = "No Data Found"
 
 
+#Open TLC for manual adding
 def opentlc(po):
+    webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/laborcosting")
+
+#Auto add tlc
+def addtlc(po):
+    
     options = Options()
     options.headless = False # set to False to see chrome window while running
     options.add_argument("--window-size=1920,1200")
     DRIVER_PATH = r"./driver/chromedriver.exe"
     driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
-    driver.get("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/laborcosting")
-    time.sleep(15)
-    but = WebDriverWait(driver, 35).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#laborcosting > div > div > div > div > div:nth-child(6) > div.col-md-5.col-sm-6 > div > button:nth-child(1) > span')))
-    print("is clickable")
-    time.sleep(2)
-    but.click()
-    op = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(1) > div.col-md-4 > select')))
-    time.sleep(2)
-    op.click()
-    modtest = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(1) > div.col-md-4 > select > option.ng-binding.ng-scope')))
-    time.sleep(2)
-    modtest.click()
-    atype = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(3) > div.col-md-4 > select')))
-    time.sleep(2)
-    atype.click()
-    hrs = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(7) > div.col-md-4 > div > input:nth-child(1)')))
-    time.sleep(2)
-    hrs.send_keys("8")
-    time.sleep(5)
-    driver.quit()
+    t = getUserTLC(driver)
+    if t < 8:
+        try:
+            driver.get("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/laborcosting")
+            time.sleep(5)
+            while True:
+                try:
+                    but = WebDriverWait(driver, 35).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#laborcosting > div > div > div > div > div:nth-child(6) > div.col-md-5.col-sm-6 > div > button:nth-child(1) > span')))
+                    print("is clickable")
+                    time.sleep(1)
+                    but.click()
+                    break
+                except:
+                    pass
+            op = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(1) > div.col-md-4 > select')))
+            time.sleep(1)
+            op.click()
+            modtest = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(1) > div.col-md-4 > select > option.ng-binding.ng-scope')))
+            time.sleep(1)
+            modtest.click()
+            atype = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(3) > div.col-md-4 > select')))
+            time.sleep(1)
+            atype.click()
+            stnd = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(3) > div.col-md-4 > select > option:nth-child(3)')))
+            time.sleep(1)
+            stnd.click()
+            hrs = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(7) > div.col-md-4 > div > input:nth-child(1)')))
+            mins = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(7) > div.col-md-4 > div > input:nth-child(2)')))
+            time.sleep(1)
+            hours = 8 - t  
+            hrs.send_keys(str(8-t))
+            time.sleep(1)
+##            hrs.clear()
+##            hrs.send_keys("0")
+##            mins.send_keys("1")
+            save = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-footer.mdfooter > button.btn.btn-primary')))
+            print("click save")
+            #time.sleep(10)
+            #save.click()
+            addedtime = WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, '//*[@id="userTable"]/tbody/tr/td[7]'))).text
+            print("tlc successfully added, total tlc is " + str(t + addedtime))
+            return("tlc successfully added, total tlc is " + str(t + addedtime))
+            driver.quit()
+        except:
+            print("unable to add tlc or site took too long to respond, please add tlc manually")
+            return "unable to add tlc or site took too long to respond, please add tlc manually"
+        driver.quit()
+    else:
+        print("tlc already above 8 hours no need to add more")
+        return "tlc already above 8 hours no need to add more"
+        driver.quit()
+#Before callng addtlc verify time is less than 8 hrs and time is int
 
 
-def openUserTLC():
-     webbrowser.get(chrome).open_new_tab("http://dca-wb-263/PROMPT/ToolLaborCost/BiWeeklyTLC")
+def getUserTLC(driver):
+    driver.get("http://dca-wb-263/PROMPT/ToolLaborCost/BiWeeklyTLC")
+    s = driver.page_source
+    print(s)
+    def compare_source(driver):
+        try:
+            return s != driver.page_source
+        except:
+            pass
+    print(s)
+    WebDriverWait(driver, 10).until(compare_source)
+    time.sleep(2)
+    while True:
+        if driver.execute_script("return jQuery.active == 0"):
+            e = driver.find_element_by_xpath('//*[@id="BiWeeklyContainer"]/div/div[5]/span[2]').text
+            print(e)
+            break
+        else:
+            time.sleep(1)
+    print(e[0])
+    return int(e[0])
+
+    
+#def openUserTLC():
+     #webbrowser.get(chrome).open_new_tab("http://dca-wb-263/PROMPT/ToolLaborCost/BiWeeklyTLC")
+     
 
 
 #def updateLastTestRan(bay_num_str, port):
@@ -777,7 +857,7 @@ ports = ["A","B","C","D","E","F"]
 
 getPriorityColors(passdownPath, cells)
 
-data = pd.read_excel(crossoverPath, sheet_name= 'QUEUE', usecols = 'F:H', dtype=str, skiprows = 4)
+data = pd.read_excel(crossoverPath, sheet_name= 'QUEUE', usecols = 'F:H', dtype=str, skiprows = 5)
 dfCrossover = pd.DataFrame(data)
 data = pd.read_excel(manualPOPath, sheet_name = 'Sheet1', usecols = 'A:E', dtype = str)
 manualDF = pd.DataFrame(data)
@@ -825,4 +905,3 @@ create_buttons(root, chamber_image, chamber_locations, active_buttons)
     
 
 root.mainloop()
-
