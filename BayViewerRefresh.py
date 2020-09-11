@@ -48,7 +48,7 @@ class Chamber:
         self.QNs = []
         self.InspLots = []
         self.ESWs = []
-        self.allQNs = [self.QNs, self.ctvQNs]
+        self.allQNs = [self.QNs, self.ctvQNs, self.gpQNs]
 
     def __str__(self):
         return 'System #:{}, PO #: {}'.format(self.system,self.chPO)
@@ -394,56 +394,61 @@ def create_window_Generic(x):
     PortDayslabel.grid(row = 8, column = 2, sticky = "nsew")
     #Change check if none to check if xxxxx
     #if chamberPO is not None:
-    chUpdateQNButton = tk.Button(window, text = "Update chamber QN's", command = (lambda: updateQN(chamberPO, chamber, True, 0)))
+    chUpdateQNButton = tk.Button(window, text = "Refresh Open Chamber QN's", command = (lambda: updateQN(chamberPO, chamber, True, 0)))
     chUpdateQNButton.grid(row = 9, column = 1, sticky = "nsew")
-    chViewQNButton = tk.Button(window, text = "View open chamber QN's", command = (lambda: viewQN(chamber, True, 0)))
+    chViewQNButton = tk.Button(window, text = "View Open Chamber QN's", command = (lambda: viewQN(chamber, True, 0)))
     chViewQNButton.grid(row = 9, column = 2, sticky = "nsew")
-    ctvUpdateQNButton = tk.Button(window, text = "Update CTV QN's", command = (lambda: updateQN(chamber.ctvPO, chamber, True, 1)))
+    ctvUpdateQNButton = tk.Button(window, text = "Refresh Open CTV QN's", command = (lambda: updateQN(chamber.ctvPO, chamber, True, 1)))
     ctvUpdateQNButton.grid(row = 10, column = 1, sticky = "nsew")
-    ctvViewQNButton = tk.Button(window, text = "View open CTV QN's", command = (lambda: viewQN(chamber, True, 1)))
+    ctvViewQNButton = tk.Button(window, text = "View Open CTV QN's", command = (lambda: viewQN(chamber, True, 1)))
     ctvViewQNButton.grid(row = 10, column = 2, sticky = "nsew")
+    gpUpdateQNButton = tk.Button(window, text = "Refresh Open Gas Panel QN's", command = (lambda: updateQN(chamber.gpPO, chamber, True, 1)))
+    gpUpdateQNButton.grid(row = 11, column = 1, sticky = "nsew")
+    gpViewQNButton = tk.Button(window, text = "View Open Gas Panel QN's", command = (lambda: viewQN(chamber, True, 2)))
+    gpViewQNButton.grid(row = 11, column = 2, sticky = "nsew")
+    
 ##    gpPO = chambers[x + (6 * (bay_num - 1))].gpPO
 ##    if not pd.isna(gpPO):
 ##        gpQNButton = tk.Button(window, text = "View gas panel QN's", command = (lambda: openqn(gpPO)))
 ##        gpQNButton.pack()
     if chamberPO is not None:
         tlc_button = tk.Button(window, text = "Auto add TLC to chamber", command = (lambda: addtlc(chamberPO)))#chambers[x + (6 * (bay_num - 1))].po)))
-        tlc_button.grid(row = 11, column = 1, sticky = "nsew")
+        tlc_button.grid(row = 12, column = 1, sticky = "nsew")
     checkUserTLCButton = tk.Button(window, text = "Manually add TLC to chamber", command = (lambda: opentlc(chamberPO)))
-    checkUserTLCButton.grid(row = 11, column = 2, sticky = "nsew")
+    checkUserTLCButton.grid(row = 12, column = 2, sticky = "nsew")
 
     checkRackStatusButton = tk.Button(window, text = "Check ERack for this system", command = (lambda: printStatus(system)))
-    checkRackStatusButton.grid(row = 12, column = 1, columnspan = 2, sticky = "nsew")#pack()
+    checkRackStatusButton.grid(row = 13, column = 1, columnspan = 2, sticky = "nsew")#pack()
     
     updateSystemNumEntry = tk.Entry(window)
-    updateSystemNumEntry.grid(row = 13, column = 1, sticky = "nsew")
+    updateSystemNumEntry.grid(row = 14, column = 1, sticky = "nsew")
     updateSystemNumButton = tk.Button(window, text = "Update System #", command = (lambda: setNewPO(chamber, updateSystemNumEntry, systemEntry, 0)))
-    updateSystemNumButton.grid(row = 13, column = 2, sticky = "nsew")
+    updateSystemNumButton.grid(row = 14, column = 2, sticky = "nsew")
     
     
     updateChPOEntry = tk.Entry(window)
-    updateChPOEntry.grid(row = 14, column = 1, sticky = "nsew")
+    updateChPOEntry.grid(row = 15, column = 1, sticky = "nsew")
     updateChPOButton = tk.Button(window, text = "Update Chamber PO", command = (lambda: setNewPO(chamber, updateChPOEntry, POEntry, 1)))
-    updateChPOButton.grid(row = 14, column = 2, columnspan = 2, sticky = "nsew")
+    updateChPOButton.grid(row = 15, column = 2, columnspan = 2, sticky = "nsew")
     updateCTVPOEntry = tk.Entry(window)
-    updateCTVPOEntry.grid(row = 15, column = 1, sticky = "nsew")
+    updateCTVPOEntry.grid(row = 16, column = 1, sticky = "nsew")
     updateCTVPOButton = tk.Button(window, text = "Update CTV PO", command = (lambda: setNewPO(chamber, updateCTVPOEntry, ctvPOEntry, 2)))
-    updateCTVPOButton.grid(row = 15, column = 2, columnspan = 2, sticky = "nsew")
+    updateCTVPOButton.grid(row = 16, column = 2, columnspan = 2, sticky = "nsew")
 
     updateGPPOEntry = tk.Entry(window)
-    updateGPPOEntry.grid(row = 16, column = 1, sticky = "nsew")
+    updateGPPOEntry.grid(row = 17, column = 1, sticky = "nsew")
     updateGPPOButton = tk.Button(window, text = "Update Gas Panel PO", command = (lambda: setNewPO(chamber, updateGPPOEntry, gpPOEntry, 3)))
-    updateGPPOButton.grid(row = 16, column = 2, columnspan = 2, sticky = "nsew")
-    createY7Button = tk.Button(window, text = "Create Y7", command = (lambda: createQN(chamberPO, chamber.system, "Y7")))
-    createY7Button.grid(row = 17, column = 1, sticky = "nsew")
-    createY8Button = tk.Button(window, text = "Create Y8", command = (lambda: createQN(chamberPO, chamber.system, "Y8")))
-    createY8Button.grid(row = 17, column = 2, sticky = "nsew")
-    iomsButton = tk.Button(window, text = "Go to iOMS", command = (lambda: webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + chamberPO + "#!/")))
-    iomsButton.grid(row = 18, column = 1, columnspan = 4, sticky = "nsew")
+    updateGPPOButton.grid(row = 17, column = 2, columnspan = 2, sticky = "nsew")
+    createY7Button = tk.Button(window, bg='yellow', text = "Create Y7", command = (lambda: createQN(chamberPO, chamber.system, "Y7")))
+    createY7Button.grid(row = 18, column = 1, sticky = "nsew")
+    createY8Button = tk.Button(window, bg='yellow', text = "Create Y8", command = (lambda: createQN(chamberPO, chamber.system, "Y8")))
+    createY8Button.grid(row = 18, column = 2, sticky = "nsew")
+    iomsButton = tk.Button(window, bg='#1ecbe1', text = "Go to iOMS", command = (lambda: webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + chamberPO + "#!/")))
+    iomsButton.grid(row = 19, column = 1, columnspan = 4, sticky = "nsew")
     create3DButton = tk.Button(window, text = "Create new 3D form", command = (lambda: webbrowser.get(chrome).open_new_tab("http://sppartner/sites/Global3D/Lists/VMORevision/Item/newifs.aspx")))
-    create3DButton.grid(row = 19, column = 1, columnspan=4, sticky = "nsew")
+    create3DButton.grid(row = 20, column = 1, columnspan=4, sticky = "nsew")
     
-    quit_buttonGeneric = tk.Button(window, text = "quit", command = window.destroy)
+    quit_buttonGeneric = tk.Button(window, text = "EXIT", command = window.destroy)
     quit_buttonGeneric.grid(row = 20, column = 0, columnspan = 4, sticky = "nsew")#pack(side = "left")
     window.focus_set()                                                        
     window.grab_set()
@@ -575,7 +580,7 @@ def openQN(qn):
 def viewQN(ch, onlyOpen, qnIdx):
     status = ""
     if onlyOpen:
-        status = "Open QN's for " + ch.system
+        status = "Open " + ("Chamber" if qnIdx == 0 else ("CTV" if qnIdx == 1 else "Gas Panel")) + " QN's for " + ch.system
     else:
         status = "All QN's for " + ch.system
     window = tk.Toplevel(root)
@@ -622,7 +627,7 @@ def viewQN(ch, onlyOpen, qnIdx):
 def getLastScanned(po, qn, text):
     print(qn.partNum)
     options = Options()
-    options.headless = False # set to False to see chrome window while running
+    options.headless = True # set to False to see chrome window while running
     options.add_argument("--window-size=1920,1200")
     DRIVER_PATH = r"./driver/chromedriver.exe"
     driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
@@ -636,21 +641,19 @@ def getLastScanned(po, qn, text):
     partNumEntry.send_keys(qn.partNum)
 
     driver.find_element_by_xpath('//*[@id="btnSearch"]/i').click()
-    #time.sleep(2)
+    time.sleep(1)
     s = driver.page_source
     def compare_source(driver):
         try:
             return s != driver.page_source
         except:
             pass
-    WebDriverWait(driver, 10).until(compare_source)
-    s = driver.page_source
     WebDriverWait(driver, 20).until(compare_source)
     s = driver.page_source
     WebDriverWait(driver, 30).until(compare_source)
-##    print(driver.execute_script("return jQuery.active == 0"))
-##    time.sleep(5)
-##    print(driver.execute_script("return jQuery.active == 0"))
+    print(driver.execute_script("return jQuery.active == 0"))
+    time.sleep(5)
+    print(driver.execute_script("return jQuery.active == 0"))
     try:
         WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
         row = driver.find_element_by_class_name("ui-grid-row")
