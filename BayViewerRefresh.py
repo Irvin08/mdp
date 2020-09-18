@@ -48,7 +48,10 @@ class Chamber:
         self.QNs = []
         self.InspLots = []
         self.ESWs = []
+        self.ctvInspLots = []
+        self.gpInspLots = []
         self.allQNs = [self.QNs, self.ctvQNs, self.gpQNs]
+        self.allInspLots = [self.InspLots, self.ctvInspLots, self.gpInspLots]
 
     def __str__(self):
         return 'System #:{}, PO #: {}'.format(self.system,self.chPO)
@@ -69,6 +72,13 @@ class Chamber:
             if q.isOpen:
                 qnList.append(q)
         return qnList
+
+    def openInspLots(self, Idx):
+        ilList = []
+        for i in self.allInspLots[Idx]:
+            if i.isOpen:
+                ilList.append(i)
+        return ilList
     
     def QNStatus(self, onlyOpen, status, qnIdx):
         if not self.allQNs[qnIdx]:
@@ -119,6 +129,22 @@ class QN:
 
     def print(self):
         return (self.Type + " " + self.QNNum + " - " + self.Desc.upper() + ("\n\n" if self.isOpen else "CLOSED\n\n"))
+
+class InspLot:
+    def __init__ (self, lotNum, Desc, Status, isOpen):
+        self.lotNum = lotNum
+        self.Desc = Desc
+        self.Status = Status
+        self.isOpen = isOpen
+
+    def isOpen(self):
+        return self.isOpen()
+
+    def print(self):
+        #global result
+        return ("InspLot " + self.lotNum + " - " + self.Desc + ("\n" if self.isOpen else (" | " + self.Status + "\n")))
+
+
 
 
 class HyperlinkManager:
@@ -328,130 +354,147 @@ def create_buttons(root, chamber_image, chamber_locations, active_buttons):
         portD_button_window = canvas.create_window(100,605, anchor= "nw", window = portD_button)
         active_buttons.append(portD_button)
 
+def updateAllQNsOnAllChambers(bay):
+    options = Options()
+    options.headless = True # set to False to see chrome window while running
+    options.add_argument("--window-size=1920,1200")
+    DRIVER_PATH = r"./driver/chromedriver.exe"
+    driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
+    for x in range(6):
+        ch = chambers[x + (6 * (bay_num - 1))]
+        updateAllChQNs2(driver, [ch.chPO, ch.ctvPO, ch.gpPO], ch)
+    driver.quit()
+
+
+def updateAllChQNs2(driver, pos, chamber):
+    for i in range(3):
+        if pos[i] and (pos[i] != "XXXXX"):
+            updateQN(pos[i], chamber, True, i, driver)
+
+def updateAllChQNs(pos, chamber):
+    print(pos)
+    options = Options()
+    options.headless = True # set to False to see chrome window while running
+    options.add_argument("--window-size=1920,1200")
+    DRIVER_PATH = r"./driver/chromedriver.exe"
+    driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
+    for i in range(3):
+        if pos[i] and (pos[i] != "XXXXX"):
+            updateQN(pos[i], chamber, True, i, driver)
+    driver.quit()
 
 def create_window_Generic(x):
-    window =tk.Toplevel(root)
-    window.geometry('+%d+%d' % (690, 100))
+    test = tk.Label(left, text=str(x)).grid(row =0, column=0)
     chamber = chambers[x + (6 * (bay_num - 1))]
     chamberPO = chamber.chPO
     ctvPO = chamber.ctvPO
     gpPO = chamber.gpPO
+    Portlabel = tk.Label(left,font = "Helvetica 16 bold", text = "Port: " + bay_num_str + ports[x])
+    Portlabel.grid(row = 0, column = 0,columnspan=4, sticky = "nsew")
     if cells[x + (6 * (bay_num - 1))] == (0, 0, 0):
         cells[x + (6 * (bay_num - 1))] = (255, 255, 255)
-    PriorityLabel = tk.Label(window, background = ("#%02x%02x%02x" % cells[x + (6 * (bay_num - 1))]))
-    PriorityLabel.grid(row = 0, column = 0, columnspan = 4, sticky = "nsew")#pack()
+    PriorityLabel = tk.Label(left, background = ("#%02x%02x%02x" % cells[x + (6 * (bay_num - 1))]))
+    #####
     portNumber = x + (6 * (bay_num - 1))
-    Portlabel = tk.Label(window, text = "Port: " + bay_num_str + ports[x])
-    Portlabel.grid(row = 1, column = 1, columnspan = 2, sticky = "nsew")#pack()
+    #####
+
     system = df.at[x + (6 * (bay_num - 1)),'System #']
-    systemEntry = tk.Text(window, height = 1, width = 25, borderwidth = 0)
+    systemEntry = tk.Text(left, font = "Helvetica 30 bold", height = 1, width = 16, borderwidth = 0)
     systemEntry.insert(1.0, system)
-    systemEntry.tag_configure("center", justify='center')
-    systemEntry.tag_add("center", "1.0", "end")
     systemEntry.configure(state="disabled")
-    systemEntry.configure(bg=window.cget('bg'), relief="flat")
-    systemEntry.grid(row = 2, column = 1, columnspan = 2, sticky = "nsew")
-    #Systemlabel = tk.Label(window, text = "System #: " + system)
-    #Systemlabel.grid(row = 2, column = 1, columnspan = 2, sticky = "nsew")
+    hawtnessRGB = ("#%02x%02x%02x" % cells[x + (6 * (bay_num - 1))])
+    print(hawtnessRGB)
+    systemEntry.configure(bg=(hawtnessRGB if hawtnessRGB != "#ffffff" else root.cget('bg')), relief="flat")
+    systemEntry.grid(row = 2, column = 0,columnspan=4,sticky = "nsew")
     system = system[0 : system.find("-")]
     #
     chTypeText = chamber.chType if chamber.chType is not None else "No chamber type found"
-    chamberTypeLabel = tk.Label(window, text = "CH Type: " + chTypeText)
-    chamberTypeLabel.grid(row = 3, column = 1, columnspan = 2, sticky = "nsew")#pack()
-    POEntry = tk.Text(window, height = 1, width = 25, borderwidth = 0)
+    chamberTypeLabel = tk.Label(left, font="Helvetica 12", text = "CH Type: " + chTypeText)
+    chamberTypeLabel.grid(row = 3, column = 0, columnspan=2, sticky = "nsew")
+    
+    POEntry = tk.Text(left, font = "Helvetica 12", height = 1, width = 25, borderwidth = 0)
     if chamberPO is None:
-        POEntry.insert(1.0, "PO is not updated, please update PO#.xlsx")
+        POEntry.insert(1.0, "PO is not updated")
     else:
         POEntry.insert(1.0, "Chamber PO: " + chamberPO)
     POEntry.tag_configure("center", justify='center')
     POEntry.tag_add("center", "1.0", "end")
     POEntry.configure(state="disabled")
-    POEntry.configure(bg=window.cget('bg'), relief="flat")
-    POEntry.grid(row = 4, column = 1, columnspan = 1, sticky = "nsew")
-    ctvPOEntry = tk.Text(window, height = 1, width = 25, borderwidth = 0)
+    POEntry.configure(bg=root.cget('bg'), relief="flat")
+    POEntry.grid(row = 3, column = 2,columnspan=2, sticky = "nsew")
+    ctvPOEntry = tk.Text(left,font="Helvetica 12", height = 1, width =25, borderwidth = 0)
     ctvText = "CTV PO is not updated" if (ctvPO == "XXXXX" or ctvPO == None) else "CTV PO: " + chamber.ctvPO
     ctvPOEntry.insert(1.0, ctvText)
     ctvPOEntry.tag_configure("center", justify = 'center')
     ctvPOEntry.tag_add("center", "1.0", "end")
     ctvPOEntry.configure(state="disabled")
-    ctvPOEntry.configure(bg=window.cget('bg'), relief="flat")
-    ctvPOEntry.grid(row = 4, column = 2, sticky = "nsew")
-    gpPOEntry = tk.Text(window, height = 1, width = 25, borderwidth = 0)
+    ctvPOEntry.configure(bg=root.cget('bg'), relief="flat")
+    ctvPOEntry.grid(row = 4, column = 0, columnspan=2, sticky = "nsew")
+    gpPOEntry = tk.Text(left,font="Helvetica 12", height = 1, width = 25, borderwidth = 0)
     gpText = "No Gas Panel PO available" if (gpPO == "XXXXX" or gpPO == None) else "GP PO: " + chamber.gpPO
     gpPOEntry.insert(1.0, gpText)
     gpPOEntry.tag_configure("center", justify = 'center')
     gpPOEntry.tag_add("center", "1.0", "end")
     gpPOEntry.configure(state="disabled")
-    gpPOEntry.configure(bg=window.cget('bg'), relief="flat")
-    gpPOEntry.grid(row = 5, column = 1, columnspan = 2, sticky = "nsew")
-    Statuslabel = tk.Label(window, text = "Status of chamber: " + df.at[x + (6 * (bay_num - 1)),'Status Of Chamber'])
-    Statuslabel.grid(row = 6, column = 1, columnspan = 2, sticky = "nsew")
-    Passdownlabel = tk.Label(window, text = "Passdown issues: " + str(df.at[x + (6 * (bay_num - 1)),'Passdown Issues']))
-    Passdownlabel.grid(row = 7, column = 1, columnspan = 2, sticky = "nsew")
-    StartDatelabel = tk.Label(window, text = "Start Date: " + str(df.at[x + (6 * (bay_num - 1)),'START Date']))
-    StartDatelabel.grid(row = 8, column = 1, sticky = "nsew")
-    PortDayslabel = tk.Label(window, text = "Port days: " + str(df.at[x + (6 * (bay_num - 1)),'Port Days']))
-    PortDayslabel.grid(row = 8, column = 2, sticky = "nsew")
+    gpPOEntry.configure(bg=root.cget('bg'), relief="flat")
+    gpPOEntry.grid(row = 4, column = 2, columnspan = 2, sticky = "nsew")
+    firstSeparator = ttk.Separator(left, orient = HORIZONTAL)
+    firstSeparator.grid(row=5,column=0,columnspan=4,rowspan=2,sticky="nsew" )
+    #####
+    Statuslabel = tk.Label(left,font="Helvetica 10", text = "Status: " + df.at[x + (6 * (bay_num - 1)),'Status Of Chamber'])
+    Statuslabel.grid(row = 7, column = 0, columnspan = 3, sticky = "nsew")
+    PortDayslabel = tk.Label(left,font="Helvetica 10", text = "Port days: " + str(df.at[x + (6 * (bay_num - 1)),'Port Days']))
+    PortDayslabel.grid(row = 7, column = 3, sticky = "nsew")
+    Passdownlabel = tk.Label(left, height=5, text = "Passdown issues: " + str(df.at[x + (6 * (bay_num - 1)),'Passdown Issues']))
+    Passdownlabel.grid(row = 8, column = 0, columnspan = 4, sticky = "nsew")
+    chUpdateQNButton = tk.Button(left, text = "Get Chamber QNs", command = (lambda: updateQN(chamberPO, chamber, True, 0)))
+    chUpdateQNButton.grid(row = 9, column = 0, sticky = "nsew")
+    ctvUpdateQNButton = tk.Button(left, text = "Get CTV QNs", command = (lambda: updateQN(ctvPO, chamber, True, 1)))
+    ctvUpdateQNButton.grid(row = 9, column = 1, sticky = "nsew")
+    gpUpdateQNButton = tk.Button(left, text = "Get GasPanel QNs", command = (lambda: updateQN(gpPO, chamber, True, 2)))
+    gpUpdateQNButton.grid(row = 9, column = 2, sticky = "nsew")
+    allUpdateQNButton = tk.Button(left, text = "Get All QNs", command = (lambda: updateAllChQNs([chamberPO, ctvPO, gpPO], chamber)))
+    allUpdateQNButton.grid(row = 9, column = 3, sticky = "nsew")
+    viewQN(chamber, True,0)
+    secondSeparator = ttk.Separator(left, orient = HORIZONTAL)
+    secondSeparator.grid(row=11,column=0,columnspan=4,sticky="nsew" )
+    checkRackStatusButton = tk.Button(left, text = "Check ERack for this system", command = (lambda: printStatus(system)))
+    checkRackStatusButton.grid(row = 12, column = 0, columnspan = 4, sticky = "nsew")
+    if chamberPO is not None:
+        tlc_button = tk.Button(left, text = "Auto add TLC to chamber", command = (lambda: addtlc(chamberPO)))#chambers[x + (6 * (bay_num - 1))].po)))
+        tlc_button.grid(row = 13, column = 0, columnspan=2, sticky = "nsew")
+    checkUserTLCButton = tk.Button(left, text = "Manually add TLC to chamber", command = (lambda: opentlc(chamberPO)))
+    checkUserTLCButton.grid(row = 13, column = 2, columnspan=2,sticky = "nsew")
+
     #Change check if none to check if xxxxx
     #if chamberPO is not None:
-    chUpdateQNButton = tk.Button(window, text = "Refresh Open Chamber QN's", command = (lambda: updateQN(chamberPO, chamber, True, 0)))
-    chUpdateQNButton.grid(row = 9, column = 1, sticky = "nsew")
-    chViewQNButton = tk.Button(window, text = "View Open Chamber QN's", command = (lambda: viewQN(chamber, True, 0)))
-    chViewQNButton.grid(row = 9, column = 2, sticky = "nsew")
-    ctvUpdateQNButton = tk.Button(window, text = "Refresh Open CTV QN's", command = (lambda: updateQN(chamber.ctvPO, chamber, True, 1)))
-    ctvUpdateQNButton.grid(row = 10, column = 1, sticky = "nsew")
-    ctvViewQNButton = tk.Button(window, text = "View Open CTV QN's", command = (lambda: viewQN(chamber, True, 1)))
-    ctvViewQNButton.grid(row = 10, column = 2, sticky = "nsew")
-    gpUpdateQNButton = tk.Button(window, text = "Refresh Open Gas Panel QN's", command = (lambda: updateQN(chamber.gpPO, chamber, True, 1)))
-    gpUpdateQNButton.grid(row = 11, column = 1, sticky = "nsew")
-    gpViewQNButton = tk.Button(window, text = "View Open Gas Panel QN's", command = (lambda: viewQN(chamber, True, 2)))
-    gpViewQNButton.grid(row = 11, column = 2, sticky = "nsew")
-    
-##    gpPO = chambers[x + (6 * (bay_num - 1))].gpPO
-##    if not pd.isna(gpPO):
-##        gpQNButton = tk.Button(window, text = "View gas panel QN's", command = (lambda: openqn(gpPO)))
-##        gpQNButton.pack()
-    if chamberPO is not None:
-        tlc_button = tk.Button(window, text = "Auto add TLC to chamber", command = (lambda: addtlc(chamberPO)))#chambers[x + (6 * (bay_num - 1))].po)))
-        tlc_button.grid(row = 12, column = 1, sticky = "nsew")
-    checkUserTLCButton = tk.Button(window, text = "Manually add TLC to chamber", command = (lambda: opentlc(chamberPO)))
-    checkUserTLCButton.grid(row = 12, column = 2, sticky = "nsew")
-
-    checkRackStatusButton = tk.Button(window, text = "Check ERack for this system", command = (lambda: printStatus(system)))
-    checkRackStatusButton.grid(row = 13, column = 1, columnspan = 2, sticky = "nsew")#pack()
-    
-    updateSystemNumEntry = tk.Entry(window)
-    updateSystemNumEntry.grid(row = 14, column = 1, sticky = "nsew")
-    updateSystemNumButton = tk.Button(window, text = "Update System #", command = (lambda: setNewPO(chamber, updateSystemNumEntry, systemEntry, 0)))
-    updateSystemNumButton.grid(row = 14, column = 2, sticky = "nsew")
+    updateSystemNumEntry = tk.Entry(left)
+    updateSystemNumEntry.grid(row = 14, column = 0,columnspan=2, sticky = "nsew")
+    updateSystemNumButton = tk.Button(left, text = "Update System #", command = (lambda: setNewPO(chamber, updateSystemNumEntry, systemEntry, 0)))
+    updateSystemNumButton.grid(row = 14, column = 2,columnspan=2, sticky = "nsew")
     
     
-    updateChPOEntry = tk.Entry(window)
-    updateChPOEntry.grid(row = 15, column = 1, sticky = "nsew")
-    updateChPOButton = tk.Button(window, text = "Update Chamber PO", command = (lambda: setNewPO(chamber, updateChPOEntry, POEntry, 1)))
+    updateChPOEntry = tk.Entry(left)
+    updateChPOEntry.grid(row = 15, column = 0,columnspan=2, sticky = "nsew")
+    updateChPOButton = tk.Button(left, text = "Update Chamber PO", command = (lambda: setNewPO(chamber, updateChPOEntry, POEntry, 1)))
     updateChPOButton.grid(row = 15, column = 2, columnspan = 2, sticky = "nsew")
-    updateCTVPOEntry = tk.Entry(window)
-    updateCTVPOEntry.grid(row = 16, column = 1, sticky = "nsew")
-    updateCTVPOButton = tk.Button(window, text = "Update CTV PO", command = (lambda: setNewPO(chamber, updateCTVPOEntry, ctvPOEntry, 2)))
+    updateCTVPOEntry = tk.Entry(left)
+    updateCTVPOEntry.grid(row = 16, column = 0,columnspan=2, sticky = "nsew")
+    updateCTVPOButton = tk.Button(left, text = "Update CTV PO", command = (lambda: setNewPO(chamber, updateCTVPOEntry, ctvPOEntry, 2)))
     updateCTVPOButton.grid(row = 16, column = 2, columnspan = 2, sticky = "nsew")
 
-    updateGPPOEntry = tk.Entry(window)
-    updateGPPOEntry.grid(row = 17, column = 1, sticky = "nsew")
-    updateGPPOButton = tk.Button(window, text = "Update Gas Panel PO", command = (lambda: setNewPO(chamber, updateGPPOEntry, gpPOEntry, 3)))
+    updateGPPOEntry = tk.Entry(left)
+    updateGPPOEntry.grid(row = 17, column = 0, columnspan=2, sticky = "nsew")
+    updateGPPOButton = tk.Button(left, text = "Update Gas Panel PO", command = (lambda: setNewPO(chamber, updateGPPOEntry, gpPOEntry, 3)))
     updateGPPOButton.grid(row = 17, column = 2, columnspan = 2, sticky = "nsew")
-    createY7Button = tk.Button(window, bg='yellow', text = "Create Y7", command = (lambda: createQN(chamberPO, chamber.system, "Y7")))
-    createY7Button.grid(row = 18, column = 1, sticky = "nsew")
-    createY8Button = tk.Button(window, bg='yellow', text = "Create Y8", command = (lambda: createQN(chamberPO, chamber.system, "Y8")))
-    createY8Button.grid(row = 18, column = 2, sticky = "nsew")
-    iomsButton = tk.Button(window, bg='#1ecbe1', text = "Go to iOMS", command = (lambda: webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + chamberPO + "#!/")))
-    iomsButton.grid(row = 19, column = 1, columnspan = 4, sticky = "nsew")
-    create3DButton = tk.Button(window, text = "Create new 3D form", command = (lambda: webbrowser.get(chrome).open_new_tab("http://sppartner/sites/Global3D/Lists/VMORevision/Item/newifs.aspx")))
-    create3DButton.grid(row = 20, column = 1, columnspan=4, sticky = "nsew")
-    
-    quit_buttonGeneric = tk.Button(window, text = "EXIT", command = window.destroy)
-    quit_buttonGeneric.grid(row = 20, column = 0, columnspan = 4, sticky = "nsew")#pack(side = "left")
-    window.focus_set()                                                        
-    window.grab_set()
+    createY7Button = tk.Button(left, text = "Create Y7", command = (lambda: createQN(chamberPO, chamber.system, "Y7")))
+    createY7Button.grid(row = 18, column = 0,columnspan=2, sticky = "nsew")
+    createY8Button = tk.Button(left, text = "Create Y8", command = (lambda: createQN(chamberPO, chamber.system, "Y8")))
+    createY8Button.grid(row = 18, column = 2,columnspan=2, sticky = "nsew")
+    iomsButton = tk.Button(left, text = "Go to iOMS", command = (lambda: webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + chamberPO + "#!/")))
+    iomsButton.grid(row = 19, column = 0, columnspan = 4, sticky = "nsew")
+    create3DButton = tk.Button(left, text = "Create new 3D form", command = (lambda: webbrowser.get(chrome).open_new_tab("http://sppartner/sites/Global3D/Lists/VMORevision/Item/newifs.aspx")))
+    create3DButton.grid(row = 20, column = 0, columnspan=4, sticky = "nsew")
 #http://dca-wb-263/QM/QM/CreateQN?prodId=1552105&qntype=Y8&slotno=B01487&plant=4070&source=PROMPT
 
 def change_bay(root, chamber_image, new_bay, entry, active_buttons, currentBayLabel):
@@ -465,7 +508,7 @@ def change_bay(root, chamber_image, new_bay, entry, active_buttons, currentBayLa
     delete_buttons()
     chamber_locations = findChamberLocations(bay_num)
     create_buttons(root, chamber_image, chamber_locations, active_buttons)
-    currentBayLabel['text'] = "Now viewing Bay " + bay_num_str
+    currentBayLabel['text'] = "Now Viewing Bay " + bay_num_str
 
 
 def delete_buttons():
@@ -485,9 +528,11 @@ def updateAllBayQNs(bay_num):
     for x in range(6):
         chamber = chambers[x + (6 * (bay_num - 1))]
         chamberPO = chamber.chPO
-        updateBayQN(driver, chamberPO, chamber)
+        updateQNWholeBay(driver, chamberPO, chamber, True, 0)
     driver.quit()
-#need to add ctv collecting
+
+
+    
 def updateBayQN(driver, po, ch):
     driver.get("http://dca-wb-263/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
     try:
@@ -500,7 +545,7 @@ def updateBayQN(driver, po, ch):
             shortText = r.find_element_by_class_name('ui-grid-coluiGrid-000L').text
             status = not r.find_element_by_xpath('.//input[@type="checkbox"]').is_selected()
             partNum = r.find_element_by_class_name('ui-grid-coluiGrid-000M').text
-            if status:# and (qnType == "Y8"):
+            if status:
                 print(partNum)
                 PN = fnmatch.filter(partNum.split(), '????-?????')
                 print(PN)
@@ -520,53 +565,173 @@ def updateBayQN(driver, po, ch):
             ch.QNs.append(QN(qnnum, qnType, shortText, status))
     except:
         ch.QNs.clear()
-############################################################################################################3
-def updateQN(po, ch, viewQNs, qnIdx):
-    options = Options()
-    options.headless = True # set to False to see chrome window while running
-    options.add_argument("--window-size=1920,1200")
-    DRIVER_PATH = r"./driver/chromedriver.exe"
-    driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
-    driver.get("http://dca-wb-263/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
-    try:
-        e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
-        ch.QNs.clear()
-        rows = driver.find_elements_by_class_name("ui-grid-row")
-        for r in rows:
-            posPartNums = []
-            qnnum = r.find_element_by_css_selector('a.ng-binding').text
-            qnType = r.find_element_by_class_name('ui-grid-coluiGrid-000K').text
-            shortText = r.find_element_by_class_name('ui-grid-coluiGrid-000L').text
-            status = not r.find_element_by_xpath('.//input[@type="checkbox"]').is_selected()
-            partNum = r.find_element_by_class_name('ui-grid-coluiGrid-000M').text
-            if qnIdx == 0:
-                if status:
-                    print(partNum)
-                    PN = fnmatch.filter(partNum.split(), '????-?????')
-                    if PN:
-                        partNum = PN
-                        ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
-                        continue
-                    else:
-                        PNReg = re.compile(r'\d{4}-\d{5}')
-                        foundPN = PNReg.search(shortText)
-                        if foundPN:
-                            print(qnnum)
-                            partNum = foundPN.group()
-                            print(partNum)
+
+def updateQNWholeBay(driver, po, ch, viewQNs, qnIdx):
+    print(po)
+    if po and (po != "XXXXX"):
+        qnCount = 0
+        driver.get("http://dca-wb-263/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
+        try:
+            e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+            ch.QNs.clear()
+            rows = driver.find_elements_by_class_name("ui-grid-row")
+            for r in rows:
+                posPartNums = []
+                qnnum = r.find_element_by_css_selector('a.ng-binding').text
+                qnType = r.find_element_by_class_name('ui-grid-coluiGrid-000K').text
+                shortText = r.find_element_by_class_name('ui-grid-coluiGrid-000L').text
+                status = not r.find_element_by_xpath('.//input[@type="checkbox"]').is_selected()
+                partNum = r.find_element_by_class_name('ui-grid-coluiGrid-000M').text
+                if qnIdx == 0:
+                    if status:
+                        print(partNum)
+                        PN = fnmatch.filter(partNum.split(), '????-?????')
+                        if PN:
+                            partNum = PN
                             ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
                             continue
-                ch.QNs.append(QN(qnnum, qnType, shortText, status))
-            elif qnIdx == 1:
-                ch.ctvQNs.append(QN(qnnum, qnType, shortText, status))
+                        else:
+                            PNReg = re.compile(r'\d{4}-\d{5}')
+                            foundPN = PNReg.search(shortText)
+                            if foundPN:
+                                print(qnnum)
+                                partNum = foundPN.group()
+                                print(partNum)
+                                ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
+                                continue
+                    ch.QNs.append(QN(qnnum, qnType, shortText, status))
+                    qnCount = qnCount + 1
+                elif qnIdx == 1:
+                    ch.ctvQNs.append(QN(qnnum, qnType, shortText, status))
+                    qnCount = qnCount + 1
+                else:
+                    ch.gpQNs.append(QN(qnnum, qnType, shortText, status))
+                    qnCount = qnCount + 1
+        except:
+            ch.allQNs[qnIdx].clear()
+
+        driver.find_element_by_xpath("/html/body/div[1]/div[1]/section/section/ul/li[2]/a").click()
+        time.sleep(3)
+        try:
+            e = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+            rows = driver.find_elements_by_class_name("ui-grid-row")
+            if len(rows) != qnCount:
+                for r in rows:
+                    try:
+                        lotDesc = r.find_element_by_class_name('ui-grid-coluiGrid-001B').text
+                        lotNum = r.find_element_by_css_selector('a.ng-binding').text
+                        lotStatus = r.find_element_by_class_name('ui-grid-coluiGrid-001F').text
+                        if lotStatus == "A":
+                            lotOpen = False
+                        else:
+                            lotOpen = True
+                        ch.allInspLots[qnIdx].append(InspLot(lotNum, lotDesc, lotStatus, lotOpen))
+                    except:
+                        continue
             else:
-                ch.gpQNs.append(QN(qnnum, qnType, shortText, status))
-        driver.quit()
-    except:
-        driver.quit()
-        ch.allQNs[qnIdx].clear()
-    if viewQNs:
-        viewQN(ch, True, qnIdx)
+                ch.allInsplots[qnIdx].clear()
+        except:
+            ch.allInspLots[qnIdx].clear()
+        for i in ch.allInspLots[qnIdx]:
+            print(i.print())
+        if viewQNs:
+            viewQN(ch, True, qnIdx)
+    else:
+        window = tk.Toplevel(root)
+        x = ("Chamber " if qnIdx == 0 else ("CTV " if qnIdx == 1 else "Gas Panel "))
+        noPOError = tk.Label(window, text = "No " + x + "PO available, please update PO.").pack()
+        okButton = tk.Button(window, text = "OK", command = window.destroy).pack()
+        window.focus_set()                                                        
+        window.grab_set()
+
+        
+############################################################################################################3
+def updateQN(po, ch, viewQNs, qnIdx, driver = None):
+    print(po)
+    if po and (po != "XXXXX"):
+        externalDriver = True
+        qnCount = 0
+        if not driver:
+            options = Options()
+            options.headless = True # set to False to see chrome window while running
+            options.add_argument("--window-size=1920,1200")
+            DRIVER_PATH = r"./driver/chromedriver.exe"
+            driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
+            externalDriver = False
+        driver.get("http://dca-wb-263/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
+        try:
+            e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+            ch.allQNs[qnIdx].clear()
+            rows = driver.find_elements_by_class_name("ui-grid-row")
+            for r in rows:
+                posPartNums = []
+                qnnum = r.find_element_by_css_selector('a.ng-binding').text
+                qnType = r.find_element_by_class_name('ui-grid-coluiGrid-000K').text
+                shortText = r.find_element_by_class_name('ui-grid-coluiGrid-000L').text
+                status = not r.find_element_by_xpath('.//input[@type="checkbox"]').is_selected()
+                partNum = r.find_element_by_class_name('ui-grid-coluiGrid-000M').text
+                if qnIdx == 0:
+                    if status:
+                        print(partNum)
+                        PN = fnmatch.filter(partNum.split(), '????-?????')
+                        if PN:
+                            partNum = PN
+                            ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
+                            continue
+                        else:
+                            PNReg = re.compile(r'\d{4}-\d{5}')
+                            foundPN = PNReg.search(shortText)
+                            if foundPN:
+                                print(qnnum)
+                                partNum = foundPN.group()
+                                print(partNum)
+                                ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
+                                continue
+                    ch.QNs.append(QN(qnnum, qnType, shortText, status))
+                    qnCount = qnCount + 1
+                elif qnIdx == 1:
+                    ch.ctvQNs.append(QN(qnnum, qnType, shortText, status))
+                    qnCount = qnCount + 1
+                else:
+                    ch.gpQNs.append(QN(qnnum, qnType, shortText, status))
+                    qnCount = qnCount + 1
+        except:
+            ch.allQNs[qnIdx].clear()
+
+        driver.find_element_by_xpath("/html/body/div[1]/div[1]/section/section/ul/li[2]/a").click()
+        time.sleep(3)
+        try:
+            e = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+            ch.allInspLots[qnIdx].clear()
+            rows = driver.find_elements_by_class_name("ui-grid-row")
+            if len(rows) != qnCount:
+                for r in rows:
+                    try:
+                        lotDesc = r.find_element_by_class_name('ui-grid-coluiGrid-001B').text
+                        lotNum = r.find_element_by_css_selector('a.ng-binding').text
+                        lotStatus = r.find_element_by_class_name('ui-grid-coluiGrid-001F').text
+                        if lotStatus == "A":
+                            lotOpen = False
+                        else:
+                            lotOpen = True
+                        ch.allInspLots[qnIdx].append(InspLot(lotNum, lotDesc, lotStatus, lotOpen))
+                    except:
+                        continue
+            else:
+                ch.allInspLots[qnIdx].clear()
+            if not externalDriver:
+                driver.quit()
+                print("quit")
+        except:
+            ch.allInspLots[qnIdx].clear()
+            if not externalDriver:
+                driver.quit()
+                print("quit")
+        for i in ch.allInspLots[qnIdx]:
+            print(i.print())
+        if viewQNs:
+            viewQN(ch, True, qnIdx)
+        
 
 def createQN(po, system, qnType):
     x = system.find("-")
@@ -577,50 +742,89 @@ def createQN(po, system, qnType):
 def openQN(qn):
     webbrowser.get(chrome).open_new_tab("https://epvpwd.amat.com:8065/com.amat.irj.portal?app=ChgQaNotif?RIWO00-QMNUM=0000" + qn)
 
-def viewQN(ch, onlyOpen, qnIdx):
+def openInspLot(il):
+    ebbrowser.get(chrome).open_new_tab("https://epvpwd.amat.com:8065/irj/portal/DisIL?QALS-PRUEFLOS=0" + il)
+##ADD INSPLOTS
+def viewQN(ch, onlyOpen, qnId):
     status = ""
+    qnIdx = 0
     if onlyOpen:
-        status = "Open " + ("Chamber" if qnIdx == 0 else ("CTV" if qnIdx == 1 else "Gas Panel")) + " QN's for " + ch.system
+        status = "Open QNs for " + ch.system + \
+                 "\n############################################################"
     else:
         status = "All QN's for " + ch.system
-    window = tk.Toplevel(root)
-    qns_label = tk.Label(window, text = status)
-    qns_label.pack()
-    openQNs = ch.openQNs(qnIdx)
-    numOpen = len(openQNs)
-    if numOpen != 0:
-        qnLinks = []
-        texts = []
-        for i in range(numOpen):
-            separator = ttk.Separator(window, orient = HORIZONTAL)
-            separator.pack(side='top', fill='both', expand=True)
-            texts.append(tk.Text(window, height = 2, borderwidth = 0))
-            qnLinks.append(texts[i])
-            qnLinks[i].tag_configure("center", justify='center')
-            qnLinks[i].tag_add("center", "1.0", "end")
-            qnLinks[i].configure(bg=window.cget('bg'), relief="flat")
-            qnLinks[i].pack()
-            hyperlink = HyperlinkManager(qnLinks[i])
-            qnLinks[i].insert(INSERT, openQNs[i].Type + " ")
-            qnLinks[i].insert(INSERT, openQNs[i].QNNum, hyperlink.add(lambda x = openQNs[i].QNNum: openQN(x)))
-            qnLinks[i].insert(INSERT, " - " + openQNs[i].Desc.upper())
-            qnLinks[i].configure(state="disabled")
-            ltsText = tk.Text(window, height = 1, borderwidth =0)
-            ltsText.tag_configure("center", justify='center')
-            ltsText.tag_add("center", "1.0", "end")
-            ltsText.configure(bg=window.cget('bg'), relief="flat")
-            ltsText.pack()
-            if openQNs[i].lastScanned:
-                ltsText.insert(INSERT, openQNs[i].lastScanned)
-            if openQNs[i].partNum and (openQNs[i].Type == "Y8" or openQNs[i].Type == "YI"):
-                ltsButton = tk.Button(window, text="Refresh last scanned", command = (lambda q = openQNs[i], text = ltsText: getLastScanned(ch.chPO, q, text)))
-                ltsButton.pack()
-    else:
-        tk.Label(window, text = "No QN data").pack()
-    quit_button_qns = tk.Button(window, text = "quit", command = window.destroy)
-    quit_button_qns.pack(side = "left")
-    window.focus_set()                                                        
-    window.grab_set()
+    n = ttk.Notebook(left, height= 322)
+    f1 = ttk.Frame(n)
+    f2 = ttk.Frame(n)
+    f3 = ttk.Frame(n)
+    f4 = ttk.Frame(n)
+    f5 = ttk.Frame(n)
+    f6 = ttk.Frame(n)
+    n.add(f1, text = " Chamber QNs ")
+    n.add(f2, text = " CTV QNs ")
+    n.add(f3, text = " Gas Panel QNs ")
+    n.add(f4, text = " Chamber ILs ")
+    n.add(f5, text = " CTV ILs ")
+    n.add(f6, text = " Gas Panel ILs ")
+    n.grid(row = 10, column = 0, columnspan=4,sticky="nsew")
+    frames = [f1, f2, f3, f4, f5, f6]
+    for qnIdx in range(3):
+        openQNs = ch.openQNs(qnIdx)
+        openInspLots = ch.openInspLots(qnIdx)
+        x = ("Chamber " if qnIdx == 0 else ("CTV " if qnIdx == 1 else "Gas Panel ")) + "QNs"
+        y = ("Chamber " if qnIdx == 0 else ("CTV " if qnIdx == 1 else "Gas Panel ")) + "InspLots"
+        numOpen = len(openQNs)
+        numOpenILs = len(openInspLots)
+        if numOpen != 0:
+            qnLinks = []
+            texts = []
+            for i in range(numOpen):
+                separator = ttk.Separator(frames[qnIdx], orient = HORIZONTAL)
+                separator.pack(side='top', fill='both', expand=True)
+                texts.append(tk.Text(frames[qnIdx], height = 2, borderwidth = 0))
+                qnLinks.append(texts[i])
+                qnLinks[i].tag_configure("center", justify='center')
+                qnLinks[i].tag_add("center", "1.0", "end")
+                qnLinks[i].configure(bg=root.cget('bg'), relief="flat")
+                qnLinks[i].pack()
+                hyperlink = HyperlinkManager(qnLinks[i])
+                qnLinks[i].insert(INSERT, openQNs[i].Type + " ")
+                qnLinks[i].insert(INSERT, openQNs[i].QNNum, hyperlink.add(lambda x = openQNs[i].QNNum: openQN(x)))
+                qnLinks[i].insert(INSERT, " - " + openQNs[i].Desc.upper())
+                qnLinks[i].configure(state="disabled")
+                ltsText = tk.Text(frames[qnIdx], height = 1, borderwidth =0)
+                ltsText.tag_configure("center", justify='center')
+                ltsText.tag_add("center", "1.0", "end")
+                ltsText.configure(bg=root.cget('bg'), relief="flat")
+                #need to disable lts text
+                ltsText.pack()
+                if openQNs[i].lastScanned:
+                    ltsText.insert(INSERT, openQNs[i].lastScanned)
+                if openQNs[i].partNum and (openQNs[i].Type == "Y8" or openQNs[i].Type == "YI"):
+                    ltsButton = tk.Button(frames[qnIdx], text="Refresh last scanned", command = (lambda q = openQNs[i], text = ltsText: getLastScanned(ch.chPO, q, text)))
+                    ltsButton.pack()
+        else:
+            tk.Label(frames[qnIdx], text = "No open QN data").pack()
+        if numOpenILs != 0:
+            n.select(qnIdx + 3)
+            ilLinks = []
+            ilTexts = []
+            for i in range(numOpenILs):
+                separator = ttk.Separator(frames[qnIdx + 3], orient = HORIZONTAL)
+                separator.pack(side='top', fill='both', expand=True)
+                ilTexts.append(tk.Text(frames[qnIdx + 3], height = 2, borderwidth = 0))
+                ilLinks.append(ilTexts[i])
+                ilLinks[i].tag_configure("center", justify='center')
+                ilLinks[i].tag_add("center", "1.0", "end")
+                ilLinks[i].configure(bg=root.cget('bg'), relief="flat")
+                ilLinks[i].pack()
+                ilhyperlink = HyperlinkManager(ilLinks[i])
+                ilLinks[i].insert(INSERT, openInspLots[i].lotNum, ilhyperlink.add(lambda x = openInspLots[i].lotNum: openInspLot(x)))
+                ilLinks[i].insert(INSERT, " - " + openInspLots[i].Desc.upper())
+                ilLinks[i].configure(state="disabled")
+        else:
+            tk.Label(frames[qnIdx + 3], text = "No open InspLot data").pack()
+    n.select(qnId)
 
 
 
@@ -877,34 +1081,66 @@ print(chamber_locations)
 #manualRows = 
 root = tk.Tk()
 root.title("Bay Status")
-w = 1154
-h = 881
+w = 1654
+h = 900
 ws = root.winfo_screenwidth() # width of the screen
 hs = root.winfo_screenheight() # height of the screen
 x = (ws/2) - (w/2)
 y = (hs/2) - (h/2)
 root.geometry('%dx%d+%d+%d' % (w, h, x, y-40))
-canvas = Canvas(root, width=1154, height=881)
+root.resizable(False, False)
+##root.columnconfigure(0,weight=1)
+#root.rowconfigure(0,weight=1)
+#canvas = Canvas(root, width=1154, height=881)
 bay_image = ImageTk.PhotoImage(file = bay_image_file)
-currentBayLabel = tk.Label(root, text = "Now viewing Bay " + bay_num_str)
-currentBayLabel.grid(row = 0, column = 0, sticky = "w")
-new_bay_entry = tk.Entry(root)
-new_bay_entry.grid(row = 0, column = 1, sticky = "e")#pack()
-refresh_button = tk.Button(root, text = "Change bay", command = (lambda: change_bay(root, chamber_image, new_bay_entry.get(), new_bay_entry, active_buttons, currentBayLabel)))#locations
-refresh_button.grid(row = 0, column = 2, sticky = "nsew")#pack()
-rackStatusEntry = tk.Entry(root)
-rackStatusEntry.grid(row = 1, column = 1, sticky = "e")#pack()
-rackStatusButton = tk.Button(root, text = "Check ERack status for system", command = (lambda: printStatus(rackStatusEntry.get().upper())))
-rackStatusButton.grid(row = 1, column = 2, sticky = "nsew")#pack()
-rackRefreshButton = tk.Button(root, text = "Refresh ERack status", command = (lambda: refreshRackStatus()))
-rackRefreshButton.grid(row = 1, column = 3, sticky = "w")#pack()
-updateAllBayQNsButton = tk.Button(root, text = "Update QN's for whole bay", command = (lambda: updateAllBayQNs(bay_num)))
-updateAllBayQNsButton.grid(row = 2, column = 2)#pack()
+
+topframe = tk.Frame(root, height=40, bg="#4599C3", bd=1, relief=SOLID)
+middleframe = tk.PanedWindow(root, height =845)
+topframe.pack(side="top", fill="x", expand=True)
+middleframe.pack(fill="both")#side="top", fill="both", expand=True)
+left = tk.Frame(middleframe, width=500,height=845, bg="blue", bd=1, relief=SOLID)
+left.columnconfigure(3,weight=1)
+#left.columnconfigure(1,weight=1)
+middleframe.paneconfig(left, minsize=500)
+right = tk.Frame(middleframe, width =1154,height=845, bg="red",bd=1,relief=SOLID)
+middleframe.paneconfig(right, minsize=1154)
+middleframe.add(left)
+
+middleframe.add(right)
+canvas = Canvas(right, width=1154, height=881)
 canvas.create_image(575,450, image = bay_image)
-canvas.grid(row = 3, column = 0, columnspan = 4)#pack()
+canvas.pack()
+
+
+
+currentBayLabel = tk.Label(topframe, bg="#4599C3",font="Helvetica 32 bold", text = "Now Viewing Bay " + bay_num_str)
+currentBayLabel.grid(row = 0, column = 0, rowspan=2, sticky = "w")
+new_bay_entry = tk.Entry(topframe)
+##new_bay_entry.configure(bg=root.cget('bg'), relief="flat")
+new_bay_entry.grid(row = 0, column = 2, sticky = "nsew")#pack()
+refresh_button = tk.Button(topframe, text = "Change bay", command = (lambda: change_bay(root, chamber_image, new_bay_entry.get(), new_bay_entry, active_buttons, currentBayLabel)))#locations
+refresh_button.grid(row = 0, column = 3, sticky = "nsew")#pack()
+rackStatusEntry = tk.Entry(topframe)
+rackStatusEntry.grid(row = 1, column = 2, sticky = "nsew")#pack()
+rackStatusButton = tk.Button(topframe, text = "Check ERack status for system", command = (lambda: printStatus(rackStatusEntry.get().upper())))
+rackStatusButton.grid(row = 1, column = 3, sticky = "nsew")#pack()
+rackRefreshButton = tk.Button(topframe, text = "Refresh ERack status", command = (lambda: refreshRackStatus()))
+rackRefreshButton.grid(row = 1, column = 4, sticky = "nsew")#pack()
+updateAllBayQNsButton = tk.Button(topframe, text = "Update all Chamber QNs", command = (lambda: updateAllBayQNs(bay_num)))
+updateAllBayQNsButton.grid(row = 1, column = 5,sticky="nsew")#pack()
+updateAllBayQNsButton = tk.Button(topframe, text = "Update all QNs for bay", command = (lambda: updateAllQNsOnAllChambers(bay_num)))
+updateAllBayQNsButton.grid(row = 1, column = 6,sticky="nsew")#pack()
+
+##topSeparator =  ttk.Separator(left, orient = HORIZONTAL)
+##topSeparator.grid(row=2,column=0,columnspan=6,rowspan=2,sticky="nsew" )
+##canvas.create_image(575,450, image = bay_image)
+
+##
+##
+##canvas.grid(row = 3, column = 1, columnspan = 4)#pack()
 chamber_image = PhotoImage(file = chamber_image_file)
 
 create_buttons(root, chamber_image, chamber_locations, active_buttons)
-    
+create_window_Generic(0)
 
 root.mainloop()
