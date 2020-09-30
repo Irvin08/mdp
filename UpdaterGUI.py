@@ -17,6 +17,7 @@ import os
 import inspect
 import re
 import time
+import json
 #Classes
 ###############################################################################################################################
 class QN:
@@ -63,26 +64,6 @@ class ESW:
         global result
         result = result + "ESW " + self.ESWNum + " - " + self.Desc + ("\n" if self.isOpen else (" | " + self.Status + "\n"))
 
-#Failed attempt to have two expected conditions at the same time
-##class wait_for_all(object):
-##    def __init__(self, methods):
-##        self.methods = methods
-##
-##    def __call__(self, driver):
-##        try:
-##            for method in self.methods:
-##                if not method(driver):
-##                    return False
-##            return True
-##        except:
-##            return False
-
-##    methods = []
-##    methods.append(EC.text_to_be_present_in_element((By.XPATH, '//*[@id="inspection"]/div[2]'), "No data available"))
-##    methods.append(EC.presence_of_element_located((By.XPATH, '//*[@id="inspection"]/div[1]/div/div/div[2]/div/table/tbody/tr[1]/td[1]/a')))
-##    method = wait_for_all(methods)
-##    WebDriverWait(driver, 15).until(method)
-
 
 #Functions
 ###############################################################################################################################
@@ -117,12 +98,41 @@ def printAll(items):
     for i in items:
         i.print()
 
-        
+#Get QNs and ILs from PROMT JSON
+def getQNsAndInspLotsJSON(driver, po, ic):
+    global result
+    try:
+        driver.get("http://webmprd:3333/rest/AMAT_iOMS_SSG/api/getQN_LOT_DataFromSAP?ORD_NUMBER=" + po)
+        WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "body > pre")))
+        x = driver.find_element_by_css_selector("body > pre").text
+        y = json.loads(x)
+        #Start QNs
+        if y["SAP_QN_DATA_RESPONSE"]["RESPONSE"]["QL_COUNT"] != "0":
+            for q in y["SAP_QN_DATA_RESPONSE"]["RESPONSE"]["QN_DATA"]["QLNOTE"]:
+                status = True if (q["ZZIMMFIX"] != "true") else False
+                qns.append(QN(q["QMNUM"], q["QMART"], q["QMTXT"], status))
+            printAll(qns) if ic else printOpen(qns)
+            qns.clear()
+        else:
+            result = result + ("No QN data found\n")
+            
+        #Start Insp Lots
+        if y["SAP_QN_DATA_RESPONSE"]["RESPONSE"]["INSLOT_COUNT"] != "0":
+            for i in y["SAP_QN_DATA_RESPONSE"]["RESPONSE"]["INSPECTION_DATA"]["INSLOT"]:
+                status = True if (i["VBEWERTUNG"] != "A") else False
+                lots.append(InspLot(i["PRUEFLOS"], i["KTEXT"], i["VBEWERTUNG"], status))
+            printAll(lots) if ic else printOpen(lots)
+            lots.clear()
+        else:
+            result = result + ("No inspection lot data found" + "\n")
+        print("done")
+    except:
+        result = result + "ERROR on PO: " + po
+
+#Get QNs from PROMPT
 def getQNs(driver, po, ic):
     global result
-    driver.get("http://dca-wb-263/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
-##    result = result + "\n################################################################################################\n"                                                                                             #\n"
-##    result = result + po + "\n"
+    driver.get("http://dca-wb-281/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
     try:
         e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
         rows = driver.find_elements_by_class_name("ui-grid-row")
@@ -137,19 +147,110 @@ def getQNs(driver, po, ic):
     except:
         result = result + "No QN data found\n"
 
+#Get InspLots from PROMPT
+def getInspLots(driver, po, ic):
+    global result
+    qnCount = 0
+    lots = []
+    driver.get("http://dca-wb-281/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
+    try:
+        e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+        rows = driver.find_elements_by_class_name("ui-grid-row")
+        for r in rows:
+            qnCount = qnCount + 1
+    except:
+        print("error on qn page")
+    driver.find_element_by_xpath("/html/body/div[1]/div[1]/section/section/ul/li[2]/a").click()
+    time.sleep(3)
+    try:
+        e = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+        rows = driver.find_elements_by_class_name("ui-grid-row")
+        if len(rows) != qnCount:
+            for r in rows:
+                try:
+                    lotDesc = r.find_element_by_class_name('ui-grid-coluiGrid-001G').text#was b
+                    #print(lotDesc)
+                    lotNum = r.find_element_by_css_selector('a.ng-binding').text
+                    lotStatus = r.find_element_by_class_name('ui-grid-coluiGrid-001K').text#wasf
+                    if lotStatus == "A":
+                        lotOpen = False
+                    else:
+                        lotOpen = True
+                    lots.append(InspLot(lotNum, lotDesc, lotStatus, lotOpen))
+                except:
+                    continue
+        else:
+            result = result + "No inspection lot data found\n"
+    except:
+        result = result + "No inspection lot data found\n"
+    if lots:
+        printAll(lots) if ic else printOpen(lots)
+        lots.clear()
 
+
+
+#Get QNs and InspLots from PROMPT
+def getQNsAndInspLots(driver, po, ic):
+    global result
+    qns = []
+    lots = []
+    qnCount = 0
+    driver.get("http://dca-wb-281/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
+    try:
+        e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+        rows = driver.find_elements_by_class_name("ui-grid-row")
+        for r in rows:
+            qnnum = r.find_element_by_css_selector('a.ng-binding').text
+            qnType = r.find_element_by_class_name('ui-grid-coluiGrid-000K').text
+            shortText = r.find_element_by_class_name('ui-grid-coluiGrid-000L').text
+            status = not r.find_element_by_xpath('.//input[@type="checkbox"]').is_selected()
+            qns.append(QN(qnnum, qnType, shortText, status))
+            qnCount = qnCount + 1
+        printAll(qns) if ic else printOpen(qns)
+        qns.clear()
+    except:
+        result = result + "No QN data found\n"
+    driver.find_element_by_xpath("/html/body/div[1]/div[1]/section/section/ul/li[2]/a").click()
+    time.sleep(3)
+    try:
+        e = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+        rows = driver.find_elements_by_class_name("ui-grid-row")
+        if len(rows) != qnCount:
+            for r in rows:
+                try:
+                    lotDesc = r.find_element_by_class_name('ui-grid-coluiGrid-001G').text
+                    lotNum = r.find_element_by_css_selector('a.ng-binding').text
+                    lotStatus = r.find_element_by_class_name('ui-grid-coluiGrid-001K').text
+                    if lotStatus == "A":
+                        lotOpen = False
+                    else:
+                        lotOpen = True
+                    lots.append(InspLot(lotNum, lotDesc, lotStatus, lotOpen))
+                except:
+                    continue
+        else:
+            result = result + "No inspection lot data found\n"
+    except:
+        result = result + "No inspection lot data found\n"
+    if qns:
+        printAll(qns) if ic else printOpen(qns)
+        qns.clear()
+    if lots:
+        printAll(lots) if ic else printOpen(lots)
+        qns.clear()
+
+
+
+
+#Get ESWs from iOMS
 def getESWs(driver, po, ic):
     global result
     driver.get("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/ESWs")
-
-
-
     timeout = False
     while(not timeout):
         try:
             text = driver.find_element_by_xpath('//*[@id="ESWs"]/div[2]').text
             if text == "ESW Data is unavailable":
-                #print(text)
                 timeout = True
                 break
         except:
@@ -157,28 +258,10 @@ def getESWs(driver, po, ic):
             pass
         try:
             text = driver.find_element_by_xpath('//*[@id="ESWs"]/div[1]/div/div/div[2]/div/table/tbody/tr')
-##            print("found table")
-##            print(text)
             break
         except:
             time.sleep(1)
             pass
-        #print("nothing found")
-    
-##  WIP for faster performance when there is no data to retrieve
-##    noData = False
-##    try:
-##        WebDriverWait(driver, 10).until(EC.text_to_be_present_in_element((By.XPATH, '//*[@id="ESWs"]/div[2]'), "ESW Data is unavailable"))
-##        noData = True
-##    except:
-##        pass
-##    try:
-##        ready = WebDriverWait(driver, 7).until(EC.presence_of_element_located((By.XPATH, '//*[@id="ESWs"]/div[1]/div/div/div[2]/div/table/tbody/tr[1]/td[1]/a')))
-##    except:
-##        ready = False
-##    if ready:
-####    try:
-####        check = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, '//*[@id="ESWs"]/div[1]/div/div/div[2]/div/table/tbody/tr[1]/td[1]/a')))
     if not timeout:
         body = driver.find_element_by_xpath('//*[@id="ESWs"]/div[1]/div/div/div[2]/div/table/tbody')
         rows = body.find_elements_by_tag_name("tr")
@@ -195,21 +278,59 @@ def getESWs(driver, po, ic):
         printAll(esws) if ic else printOpen(esws)
         esws.clear()
     else:
-    ##except:
-        result = result + "No ESW data found\n"   
+        result = result + "No ESW data found\n"
 
 
+#Get ESWs and Build % from iOMS
+def getESWsAndBuild(driver, po, ic):
+    global result
+    driver.get("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/ESWs")
+    timeout = False
+    while(not timeout):
+        try:
+            text = driver.find_element_by_xpath('//*[@id="ESWs"]/div[2]').text
+            if text == "ESW Data is unavailable":
+                timeout = True
+                break
+        except:
+            time.sleep(1)
+            pass
+        try:
+            text = driver.find_element_by_xpath('//*[@id="ESWs"]/div[1]/div/div/div[2]/div/table/tbody/tr')
+            break
+        except:
+            time.sleep(1)
+            pass
+    buildPercent = driver.find_element_by_xpath('//*[@id="Container"]/div[1]/div[3]/div[1]/div/div[3]/div/div/div[1]/span[2]').text
+    if not timeout:
+        body = driver.find_element_by_xpath('//*[@id="ESWs"]/div[1]/div/div/div[2]/div/table/tbody')
+        rows = body.find_elements_by_tag_name("tr")
+        for r in rows:
+            eswNum = r.find_element_by_css_selector('a.ng-binding').text
+            eswDesc = r.find_element_by_xpath('.//td[2]').text
+            eswStatus = r.find_element_by_xpath('.//td[4]/button').text
+            if eswStatus == "Click to Sign":
+                eswStatus = "Not Signed"
+                eswOpen = True
+            else:
+                eswOpen = False
+            esws.append(ESW(eswNum, eswDesc, eswStatus, eswOpen))
+        printAll(esws) if ic else printOpen(esws)
+        esws.clear()
+        result = result + buildPercent + "\n"
+    else:
+        result = result + "No ESW data found\n" + buildPercent + "\n"
 
+
+#Get InspLots and Build % from iOMS
 def getInspLotsAndBuild(driver, po, ic):
     global result
     driver.get("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/inspection")
-
     timeout = False
     while(not timeout):
         try:
             text = driver.find_element_by_xpath('//*[@id="inspection"]/div[2]').text
             if text == "No data available":
-                #print(text)
                 timeout = True
                 break
         except:
@@ -217,30 +338,10 @@ def getInspLotsAndBuild(driver, po, ic):
             pass
         try:
             text = driver.find_element_by_xpath('//*[@id="inspection"]/div[1]/div/div/div[2]/div/table/tbody/tr')
-##            print("found table")
-##            print(text)
             break
         except:
             time.sleep(1)
             pass
-        #print("noting found")
-##    noData = False
-##    try:
-##        WebDriverWait(driver, 10).until(EC.text_to_be_present_in_element((By.XPATH, '//*[@id="inspection"]/div[2]'), "No data available"))
-##        noData = True
-##    except:
-##        pass
-##    try:
-##        ready = WebDriverWait(driver, 7).until(EC.presence_of_element_located((By.XPATH, '//*[@id="inspection"]/div[1]/div/div/div[2]/div/table/tbody/tr[1]/td[1]/a')))
-##    except:
-##        ready = False
-##    buildPercent = driver.find_element_by_xpath('//*[@id="Container"]/div[1]/div[3]/div[1]/div/div[3]/div/div/div[1]/span[2]').text
-##    if ready:
-####    timeout = False
-####    try:
-####        check = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.XPATH, '//*[@id="inspection"]/div[1]/div/div/div[2]/div/table/tbody/tr[1]/td[1]/a')))
-####    except:
-####        timeout = True
     buildPercent = driver.find_element_by_xpath('//*[@id="Container"]/div[1]/div[3]/div[1]/div/div[3]/div/div/div[1]/span[2]').text
     if not timeout:
         body = driver.find_element_by_xpath('//*[@id="inspection"]/div[1]/div/div/div[2]/div/table/tbody')
@@ -261,17 +362,17 @@ def getInspLotsAndBuild(driver, po, ic):
         result = result + "No inspection lot data found\n"  + buildPercent + "\n"
 
 
-def runUpdater(entry, qns, text, qnSelect, eswSelect, ilSelect, allSelect, includeClosed):
+def runUpdater(entry, qns, text, qnSelect, ilSelect, eswSelect, allSelect, includeClosed):
     global result
     result = ""
     text.configure(state='normal')
     text.delete(1.0, tk.END)
-    r = getResult(entry, qns, qnSelect, eswSelect, ilSelect, allSelect, includeClosed)
+    r = getResult(entry, qns, qnSelect, ilSelect, eswSelect, allSelect, includeClosed)
     text.insert(tk.END, r)
     text.configure(state='disabled')
 
 
-def getResult(entry, qns, qnSelect, eswSelect, ilSelect, allSelect, includeClosed):
+def getResult(entry, qns, qnSelect, ilSelect, eswSelect, allSelect, includeClosed):
     global result
     entryStr = entry.get()
     entry.delete('0', 'end')
@@ -284,22 +385,24 @@ def getResult(entry, qns, qnSelect, eswSelect, ilSelect, allSelect, includeClose
     POs = entryToPo(entryStr)
     for po in POs:
         print(po)
+    if allSelect:
+        qnSelect = True
+        eswSelect = True
+        #ilSelect = True
     for po in POs:
-        if allSelect:
-            qnSelect = True
-            eswSelect = True
-            ilSelect = True
         result = result + "\n################################################################################################\n"                                                                                             #\n"
         result = result + po + "\n"
         if qnSelect:
-            getQNs(driver, po, includeClosed)
+            getQNsAndInspLotsJSON(driver, po, includeClosed)
+##        else:
+##            if qnSelect:
+##                getQNsAndInspLotsJSON(driver, po, includeClosed)
+##            if ilSelect:
+##                getQNsAndInspLotsJSON(driver, po, includeClosed)
         if eswSelect:
-            getESWs(driver, po, includeClosed)
-        if ilSelect:
-            getInspLotsAndBuild(driver, po, includeClosed)
+            getESWsAndBuild(driver, po, includeClosed)
     result = result + ("\nTime finished: " + datetime.now().strftime("%m/%d/%Y %H:%M:%S") + "\n")
     driver.quit()
-    #print("Time finished: " + datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
     return result
 
 ######################################################################             MAIN                        ####################################################
@@ -323,15 +426,15 @@ POEntry.grid(row = 0, column = 1, sticky = "nsew")
 text = tk.Text(root, width = 160, height = 55)
 text.grid(row = 1, column = 0, columnspan = 8, sticky = "nsew")
 qnSelect = tk.IntVar()
-tk.Checkbutton(root, text="Include QNs", variable=qnSelect).grid(row = 0, column = 3, sticky = "nsew")
-eswSelect = tk.IntVar()
-tk.Checkbutton(root, text="Include ESWs", variable=eswSelect).grid(row = 0, column = 4, sticky = "nsew")
+tk.Checkbutton(root, text="Include QNs and Insp Lots", variable=qnSelect).grid(row = 0, column = 3, sticky = "nsew")
 ilSelect = tk.IntVar()
-tk.Checkbutton(root, text="Include Insp Lots & Build %", variable=ilSelect).grid(row = 0, column = 5, sticky = "nsew")
+#tk.Checkbutton(root, text="Include Insp Lots", variable=ilSelect).grid(row = 0, column = 4, sticky = "nsew")
+eswSelect = tk.IntVar()
+tk.Checkbutton(root, text="Include ESWs and Build %", variable=eswSelect).grid(row = 0, column = 4, sticky = "nsew")
 allSelect = tk.IntVar()
-tk.Checkbutton(root, text="Include all data", variable=allSelect).grid(row = 0, column = 6, sticky = "nsew")
+tk.Checkbutton(root, text="Include all data", variable=allSelect).grid(row = 0, column = 5, sticky = "nsew")
 includeClosed = tk.IntVar()
-tk.Checkbutton(root, text="Include closed", variable=includeClosed).grid(row = 0, column = 7, sticky = "nsew")
-QNCheckButton = tk.Button(root, text = "Get Update", command = (lambda: runUpdater(POEntry, qns, text, qnSelect.get(), eswSelect.get(), ilSelect.get(), allSelect.get(), includeClosed.get()))).grid(row = 0, column = 2, sticky = "nsew")
-creditLabel = tk.Label(root, text = "IC  v1.4").grid(row = 2, column =7 , sticky = "se")
+tk.Checkbutton(root, text="Include closed", variable=includeClosed).grid(row = 0, column = 6, sticky = "nsew")
+QNCheckButton = tk.Button(root, text = "Get Update", command = (lambda: runUpdater(POEntry, qns, text, qnSelect.get(), ilSelect.get(), eswSelect.get(), allSelect.get(), includeClosed.get()))).grid(row = 0, column = 2, sticky = "nsew")
+creditLabel = tk.Label(root, text = "IC  v1.7").grid(row = 2, column = 6 , sticky = "se")
 root.mainloop()
