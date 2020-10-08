@@ -34,6 +34,7 @@ import fnmatch
 import time
 import random
 import json
+import math
 
 
 class Chamber:
@@ -267,7 +268,7 @@ def getPOs(chambers):
         if not skip:
             z = y.find('-')
             y = y[0 : z + 2]
-            print(y)
+            #print(y)
             if "D01" in y:
                 try:
                     r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '].astype(str).str.contains(y)]
@@ -301,12 +302,15 @@ def getPOs(chambers):
             if not done:
                 chambers.append(Chamber(y, po, "XXXXX", "XXXXX", chtype, x)) if found else chambers.append(Chamber(y, "XXXXX", "XXXXX", "XXXXX", "XXXXXX", x))
                 
-
+#Removed bay extensions for now
 def getPriorityColors(file, cells):
     wb = load_workbook(file, data_only = True)
     sh = wb['Lead Passdown']
-    for x in range (61):
+    for x in range (65):
+        if x in [37, 38, 57, 58]:
+            continue
         color_in_hex = sh["A" + str(x+1)].fill.start_color.index
+        #print(str(x) + " " + str(color_in_hex))
         if color_in_hex != 0:
             try:
                 rgb = tuple(int(color_in_hex[i:i+2], 16) for i in ( 2, 4, 6))
@@ -502,8 +506,8 @@ def create_window_Generic(x):
     if chamberPO is not None:
         tlc_button = tk.Button(left, text = "Auto add TLC to chamber", command = (lambda: addtlc(chamberPO)))#chambers[x + (6 * (bay_num - 1))].po)))
         tlc_button.grid(row = 13, column = 0, columnspan=2, sticky = "nsew")
-    checkUserTLCButton = tk.Button(left, text = "Manually add TLC to chamber", command = (lambda: opentlc(chamberPO)))
-    checkUserTLCButton.grid(row = 13, column = 2, columnspan=2,sticky = "nsew")
+    manualTLCButton = tk.Button(left, text = "Manually add TLC to chamber", command = (lambda: opentlc(chamberPO)))
+    manualTLCButton.grid(row = 13, column = 2, columnspan=2,sticky = "nsew")
 
     #Change check if none to check if xxxxx
     #if chamberPO is not None:
@@ -526,10 +530,10 @@ def create_window_Generic(x):
     updateGPPOEntry.grid(row = 17, column = 0, columnspan=2, sticky = "nsew")
     updateGPPOButton = tk.Button(left, text = "Update Gas Panel PO", command = (lambda: setNewPO(chamber, updateGPPOEntry, gpPOEntry, 3)))
     updateGPPOButton.grid(row = 17, column = 2, columnspan = 2, sticky = "nsew")
-    createY7Button = tk.Button(left, text = "Create Y7", command = (lambda: createQN(chamberPO, chamber.system, "Y7")))
-    createY7Button.grid(row = 18, column = 0,columnspan=2, sticky = "nsew")
-    createY8Button = tk.Button(left, text = "Create Y8", command = (lambda: createQN(chamberPO, chamber.system, "Y8")))
-    createY8Button.grid(row = 18, column = 2,columnspan=2, sticky = "nsew")
+    createY7Button = tk.Button(left, text = "Create New QN",command = (lambda: createQN(chamberPO, chamber.system, "Y7")))
+    createY7Button.grid(row = 18, column = 0,columnspan=4, sticky = "nsew")
+##    createY8Button = tk.Button(left, text = "Create Y8",state=tk.DISABLED ,command = (lambda: createQN(chamberPO, chamber.system, "Y8")))
+##    createY8Button.grid(row = 18, column = 2,columnspan=2, sticky = "nsew")
     iomsButton = tk.Button(left, text = "Go to iOMS", command = (lambda: webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + chamberPO + "#!/")))
     iomsButton.grid(row = 19, column = 0, columnspan = 4, sticky = "nsew")
     create3DButton = tk.Button(left, text = "Create new 3D form", command = (lambda: webbrowser.get(chrome).open_new_tab("http://sppartner/sites/Global3D/Lists/VMORevision/Item/newifs.aspx")))
@@ -806,11 +810,11 @@ def updateQN(po, ch, viewQNs, qnIdx, driver = None):
         
 
 def createQN(po, system, qnType):
+    global user
     x = system.find("-")
     system = system[0:x]
-    print(system)
-    webbrowser.get(chrome).open_new_tab("http://dca-wb-281/QM/QM/CreateQN?prodId=" + po + "&qntype=" + qnType +"&slotno=" + system + "&plant=4070&source=PROMPT")
-
+    webbrowser.get(chrome).open_new_tab("http://qualitynotescm/QN?productionOrder=" + po +"&ntLoginID=" + user + "&application=prompt&slot=" + system + "&plant=4070&material=")
+    
 def openQN(qn):
     webbrowser.get(chrome).open_new_tab("https://epvpwd.amat.com:8065/com.amat.irj.portal?app=ChgQaNotif?RIWO00-QMNUM=0000" + qn)
 
@@ -950,97 +954,83 @@ def getLastScanned(po, qn, text):
 
 #Open TLC for manual adding
 def opentlc(po):
-    webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/laborcosting")
+    r = Tk()
+    r.withdraw()
+    r.clipboard_clear()
+    r.clipboard_append(po)
+    r.update()
+    r.destroy()
+    webbrowser.get(chrome).open_new_tab("http://dca-wb-281/TLC/TLCLogHours/LogHoursSummary")
 
+    
 #Auto add tlc
 def addtlc(po):
-    
     options = Options()
     options.headless = False # set to False to see chrome window while running
     options.add_argument("--window-size=1920,1200")
     DRIVER_PATH = r"./driver/chromedriver.exe"
     driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
-    t = getUserTLC(driver)
-    if t < 8:
+    hrs = getUserTLC(driver)
+    print(hrs)
+    mins = str(random.randint(0,30))
+    print(mins)
+    driver.get("http://dca-wb-281/TLC/TLCLogHours/LogHoursSummary")
+    if hrs < 8:
+        hrsneeded = 8 - hrs
         try:
-            driver.get("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/laborcosting")
-            time.sleep(5)
-            while True:
-                try:
-                    but = WebDriverWait(driver, 35).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#laborcosting > div > div > div > div > div:nth-child(6) > div.col-md-5.col-sm-6 > div > button:nth-child(1) > span')))
-                    print("is clickable")
-                    time.sleep(1)
-                    but.click()
-                    break
-                except:
-                    pass
-            op = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(1) > div.col-md-4 > select')))
+            addButton = WebDriverWait(driver, 35).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#AddHoursid')))
+            addButton.click()
             time.sleep(1)
-            op.click()
-            modtest = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(1) > div.col-md-4 > select > option.ng-binding.ng-scope')))
+            tlcPO = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#tlc_prd_orders')))
+            tlcPO.click()
             time.sleep(1)
-            modtest.click()
-            atype = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(3) > div.col-md-4 > select')))
+            tlcPO.send_keys(po)
+            tlcPOSelect = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#ui-id-7 > li')))
+            print("po loaded")
+            tlcPhase = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#Phase')))
+            tlcPhase.click()
+            phaseSelect = driver.find_element_by_css_selector("#Phase > option:nth-child(4)")
+            phaseSelect.click()
             time.sleep(1)
-            atype.click()
-            stnd = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(3) > div.col-md-4 > select > option:nth-child(3)')))
+            tlcOP = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#OperationId')))
+            tlcOP.click()
+            opSelect = driver.find_element_by_xpath('//*[@id="0160"]')
+            opSelect.click()
             time.sleep(1)
-            stnd.click()
-            hrs = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(7) > div.col-md-4 > div > input:nth-child(1)')))
-            mins = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(7) > div.col-md-4 > div > input:nth-child(2)')))
-            time.sleep(1)
-            hours = 8 - t  
-            hrs.send_keys(str(8-t))
-            time.sleep(1)
-##            hrs.clear()
-##            hrs.send_keys("0")
-##            mins.send_keys("1")
-            save = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-footer.mdfooter > button.btn.btn-primary')))
-            print("click save")
-            #time.sleep(10)
-            #save.click()
-            addedtime = WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, '//*[@id="userTable"]/tbody/tr/td[7]'))).text
-            print("tlc successfully added, total tlc is " + str(t + addedtime))
-            return("tlc successfully added, total tlc is " + str(t + addedtime))
-            driver.quit()
+            tlcInstruction = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#OmsIndexId')))
+            tlcInstruction.click()
+            instructionSelect = driver.find_element_by_xpath('//*[@id="200"]')
+            instructionSelect.click()
+            startTime = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#timepicker_start')))
+            startTime.click()
+            startTime.send_keys("0600")
+            endTime = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#timepicker_end')))
+            endTime.click()
+            if hrsneeded >= 4:
+                endTime.send_keys(str(hrsneeded + 6) + mins)
+            else:
+                endTime.send_keys("0" + str(hrsneeded + 6) + mins)
+##            saveButton = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#btnSave')))
+##            saveButton.click()
+##            time.sleep(2)
+##            WebDriverWait(driver, 35).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#AddHoursid')))
+##            print("successfully added " + hrs + mins)
         except:
-            print("unable to add tlc or site took too long to respond, please add tlc manually")
-            return "unable to add tlc or site took too long to respond, please add tlc manually"
-        driver.quit()
-    else:
-        print("tlc already above 8 hours no need to add more")
-        return "tlc already above 8 hours no need to add more"
-        driver.quit()
-#Before callng addtlc verify time is less than 8 hrs and time is int
-
+            print("Error adding TLC, please add manually.")
 
 def getUserTLC(driver):
-    driver.get("http://dca-wb-281/PROMPT/ToolLaborCost/BiWeeklyTLC")
-    s = driver.page_source
-    print(s)
-    def compare_source(driver):
-        try:
-            return s != driver.page_source
-        except:
-            pass
-    print(s)
-    WebDriverWait(driver, 10).until(compare_source)
-    time.sleep(2)
-    while True:
-        if driver.execute_script("return jQuery.active == 0"):
-            e = driver.find_element_by_xpath('//*[@id="BiWeeklyContainer"]/div/div[5]/span[2]').text
-            print(e)
-            break
-        else:
-            time.sleep(1)
-    print(e[0])
-    return int(e[0])
-
+    global today
+    global empNum
+    driver.get("http://dca-app-1445/TLCAPI/api/TLCLogHoursApi/?userid=" + empNum + "&currentDate=" + today + "&plant=null")
+    x = driver.find_element_by_css_selector("body > pre").text
+    y = json.loads(x)
+    hrs = 0
+    for _ in y:
+        hrs = hrs + float(_["sapDecimalHours"])
+    print(hrs)
+    return int(round(hrs))
     
-#def openUserTLC():
-     #webbrowser.get(chrome).open_new_tab("http://dca-wb-263/PROMPT/ToolLaborCost/BiWeeklyTLC")
-     
-
+    
 
 #def updateLastTestRan(bay_num_str, port):
     # TODO: implement 
@@ -1110,9 +1100,11 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
     
 ############################################################ MAIN PROGRAM BEGINS ########################################################################
-print(datetime.today())
+today = datetime.today().strftime("%m/%d/%y")
+print(today)
 skip = True
-
+user = os.getlogin()
+empNum = re.sub("[^0-9]", "", user)
 rackStatus = load_workbook(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\EQRK Status.xlsx')
 rackStatusSheet = rackStatus["Sheet1"]
 manualPOsFile = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx'
@@ -1151,7 +1143,7 @@ bay_num_str = "8"
 bay_num = 8
 data = pd.read_excel(passdownPath)
 df = pd.DataFrame(data, columns= ['Bay ','System #', 'Status Of Chamber', ' ','START Date','Port Days'])#Passdown Issues
-df.drop(df.index[[54, 55]], inplace=True)
+df.drop(df.index[[34, 35, 54, 55]], inplace=True)
 df.reset_index(drop=True, inplace=True)
 
 manualPOs = load_workbook(manualPOsFile)
@@ -1180,6 +1172,7 @@ root.resizable(False, False)
 bay_image = ImageTk.PhotoImage(file = bay_image_file)
 
 topframe = tk.Frame(root, height=40, bg="#4599C3", bd=1, relief=SOLID)
+topframe.columnconfigure(7, weight=1)
 middleframe = tk.PanedWindow(root, height =855)#845
 topframe.pack(side="top", fill="x", expand=True)
 middleframe.pack(fill="both")#side="top", fill="both", expand=True)
@@ -1195,8 +1188,6 @@ middleframe.add(right)
 canvas = Canvas(right, width=1154, height=881)
 canvas.create_image(575,450, image = bay_image)
 canvas.pack()
-
-
 
 currentBayLabel = tk.Label(topframe, bg="#4599C3",font="Helvetica 32 bold", text = "Now Viewing Bay " + bay_num_str)
 currentBayLabel.grid(row = 0, column = 0, rowspan=2, sticky = "w")
@@ -1215,6 +1206,9 @@ updateAllBayQNsButton = tk.Button(topframe, text = "Update all Chamber QNs", com
 updateAllBayQNsButton.grid(row = 1, column = 5,sticky="nsew")#pack()
 updateAllBayQNsButton = tk.Button(topframe, text = "Update all QNs for bay", command = (lambda: updateAllQNsOnAllChambers(bay_num)))
 updateAllBayQNsButton.grid(row = 1, column = 6,sticky="nsew")#pack()
+userLabel = tk.Label(topframe, bg="#4599C3",font="Helvetica 16", text = "Signed in as: " + user)
+userLabel.grid(row = 1, column = 7, sticky = "e")
+
 
 ##topSeparator =  ttk.Separator(left, orient = HORIZONTAL)
 ##topSeparator.grid(row=2,column=0,columnspan=6,rowspan=2,sticky="nsew" )
