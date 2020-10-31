@@ -33,7 +33,8 @@ import os
 import fnmatch
 import time
 import random
-
+import json
+import math
 
 class Chamber:
     def __init__ (self, system, chamberPO, ctvPO, gpPO, chType, portIdx):
@@ -195,7 +196,7 @@ def getLatestFile(path):
 
 def printStatus(system):
     print(system)
-    rows = rackStatusSheet.iter_rows(rackStatusSheet.max_row - 100, rackStatusSheet.max_row)
+    rows = rackStatusSheet.iter_rows(rackStatusSheet.max_row - 200, rackStatusSheet.max_row)
     status = ""
     found = False
     for row in rows:
@@ -249,6 +250,8 @@ def getPOs(chambers):
     global dfCrossover
     global df
     global dfManual
+    #chekc tihs will work bruh
+    #found = False
     manualPOs = load_workbook(manualPOsFile)
     ws = manualPOs.active
     rows = list(ws.rows)
@@ -258,7 +261,9 @@ def getPOs(chambers):
         done = False
         y = df.at[x, 'System #']
         y = y.replace(" ", "")
-        if y == "EMPTY":
+##        if (x == 57) or (x == 58):
+##            
+        if "EMPTY" in y:
             chambers.append(Chamber("XXXXX-X", "XXXXX", "XXXXX", "XXXXX", "XXXXX", x))
             skip = True
         if not skip:
@@ -267,21 +272,26 @@ def getPOs(chambers):
             print(y)
             if "D01" in y:
                 try:
-                    r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '] == y]
+                    r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '].astype(str).str.contains(y)]
                     chambers.append(Chamber(y, r.values[0,1], "XXXXX", "XXXXX", r.values[0,2], x))
                 except IndexError:
                     y = y.replace("D01", "")
-                    r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '] == y]
+                    r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '].astype(str).str.contains(y)]
                     chambers.append(Chamber(y, r.values[0,1], "XXXXX", "XXXXX", r.values[0,2], x))
             else:
                 try:
-                    r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '] == y]
+                    #r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '] == y]
+                    #df['A'].str.contains("hello")
+                    r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '].astype(str).str.contains(y)]
                     po = r.values[0,1]
                     chtype = r.values[0,2]
                     found = True
                 except IndexError:
                     pass
             r = rows[x + 1]
+##            #add if chamber doesn't match chamber in row delete po's
+##            if r[1].velue != y:
+##                
             if r[1].value == y:
                 init = [y, po, None, None, chtype, x]
                 z = [cell.value for cell in r]
@@ -293,12 +303,15 @@ def getPOs(chambers):
             if not done:
                 chambers.append(Chamber(y, po, "XXXXX", "XXXXX", chtype, x)) if found else chambers.append(Chamber(y, "XXXXX", "XXXXX", "XXXXX", "XXXXXX", x))
                 
-
+#Removed bay extensions for now
 def getPriorityColors(file, cells):
     wb = load_workbook(file, data_only = True)
     sh = wb['Lead Passdown']
-    for x in range (61):
+    for x in range (65):
+        if x in [37, 38, 57, 58]:
+            continue
         color_in_hex = sh["A" + str(x+1)].fill.start_color.index
+        #print(str(x) + " " + str(color_in_hex))
         if color_in_hex != 0:
             try:
                 rgb = tuple(int(color_in_hex[i:i+2], 16) for i in ( 2, 4, 6))
@@ -384,6 +397,7 @@ def updateAllChQNs(pos, chamber):
     driver.quit()
 
 def create_window_Generic(x):
+    passLabelHeight = 5
     test = tk.Label(left, text=str(x)).grid(row =0, column=0)
     chamber = chambers[x + (6 * (bay_num - 1))]
     chamberPO = chamber.chPO
@@ -403,13 +417,12 @@ def create_window_Generic(x):
     systemEntry.insert(1.0, system)
     systemEntry.configure(state="disabled")
     hawtnessRGB = ("#%02x%02x%02x" % cells[x + (6 * (bay_num - 1))])
-    print(hawtnessRGB)
     systemEntry.configure(bg=(hawtnessRGB if hawtnessRGB != "#ffffff" else root.cget('bg')), relief="flat")
     systemEntry.grid(row = 2, column = 0,columnspan=4,sticky = "nsew")
     system = system[0 : system.find("-")]
     #
     chTypeText = chamber.chType if chamber.chType is not None else "No chamber type found"
-    chamberTypeLabel = tk.Label(left, font="Helvetica 12", text = "CH Type: " + chTypeText)
+    chamberTypeLabel = tk.Label(left, width = 25, height = 2, wraplength = 210, font="Helvetica 12", text = "CH Type: " + chTypeText.replace("\n", ""))
     chamberTypeLabel.grid(row = 3, column = 0, columnspan=2, sticky = "nsew")
     
     POEntry = tk.Text(left, font = "Helvetica 12", height = 1, width = 25, borderwidth = 0)
@@ -441,12 +454,34 @@ def create_window_Generic(x):
     firstSeparator = ttk.Separator(left, orient = HORIZONTAL)
     firstSeparator.grid(row=5,column=0,columnspan=4,rowspan=2,sticky="nsew" )
     #####
-    Statuslabel = tk.Label(left,font="Helvetica 10", text = "Status: " + df.at[x + (6 * (bay_num - 1)),'Status Of Chamber'])
-    Statuslabel.grid(row = 7, column = 0, columnspan = 3, sticky = "nsew")
+    chStatus = df.at[x + (6 * (bay_num - 1)),'Status Of Chamber']
+    statusEntry = tk.Text(left,font="Helvetica 10", height = 3, width = 25, borderwidth = 0, wrap=WORD)
+    print(system)
+    print(chStatus)
+    print(x)
+    statusText = "Status: " + chStatus
+    statusEntry.insert(1.0, statusText)
+    statusEntry.tag_configure("center", justify = 'center')
+    statusEntry.tag_add("center", "1.0", "end")
+    statusEntry.configure(state="disabled")
+    statusEntry.configure(bg=root.cget('bg'), relief="flat")
+    statusEntry.grid(row = 7, column = 0, columnspan = 3, sticky = "nsew")
+    
     PortDayslabel = tk.Label(left,font="Helvetica 10", text = "Port days: " + str(df.at[x + (6 * (bay_num - 1)),'Port Days']))
     PortDayslabel.grid(row = 7, column = 3, sticky = "nsew")
-    Passdownlabel = tk.Label(left, height=5, text = "Passdown issues: " + str(df.at[x + (6 * (bay_num - 1)),'Passdown Issues']))
+    chPassdown = str(df.at[x + (6 * (bay_num - 1)),' '])
+##    if chPassdown.find("\n") > 60 or (chPassdown.find("\n") == -1):
+##        chPassdown = chPassdown[:60] + "\n" + chPassdown[60:]
+    Passdownlabel = tk.Label(left, font = "Helvetica 10", height = 2, text = "Passdown issues: " + chPassdown)#str(df.at[x + (6 * (bay_num - 1)),' ']))#'Passdown Issues']))
     Passdownlabel.grid(row = 8, column = 0, columnspan = 4, sticky = "nsew")
+    passdownEntry = tk.Text(left,font="Helvetica 10", height = 4, width = 25, borderwidth = 0, wrap=WORD)
+    passdownText = "Issues: " + chPassdown
+    passdownEntry.insert(1.0, passdownText)
+    passdownEntry.tag_configure("center", justify = 'center')
+    passdownEntry.tag_add("center", "1.0", "end")
+    passdownEntry.configure(state="disabled")
+    passdownEntry.configure(bg=root.cget('bg'), relief="flat")
+    passdownEntry.grid(row = 8, column = 0, columnspan = 4, sticky = "nsew")    
     chUpdateQNButton = tk.Button(left, text = "Get Chamber QNs", command = (lambda: updateQN(chamberPO, chamber, True, 0)))
     chUpdateQNButton.grid(row = 9, column = 0, sticky = "nsew")
     ctvUpdateQNButton = tk.Button(left, text = "Get CTV QNs", command = (lambda: updateQN(ctvPO, chamber, True, 1)))
@@ -463,8 +498,8 @@ def create_window_Generic(x):
     if chamberPO is not None:
         tlc_button = tk.Button(left, text = "Auto add TLC to chamber", command = (lambda: addtlc(chamberPO)))#chambers[x + (6 * (bay_num - 1))].po)))
         tlc_button.grid(row = 13, column = 0, columnspan=2, sticky = "nsew")
-    checkUserTLCButton = tk.Button(left, text = "Manually add TLC to chamber", command = (lambda: opentlc(chamberPO)))
-    checkUserTLCButton.grid(row = 13, column = 2, columnspan=2,sticky = "nsew")
+    manualTLCButton = tk.Button(left, text = "Manually add TLC to chamber", command = (lambda: opentlc(chamberPO)))
+    manualTLCButton.grid(row = 13, column = 2, columnspan=2,sticky = "nsew")
 
     #Change check if none to check if xxxxx
     #if chamberPO is not None:
@@ -487,17 +522,17 @@ def create_window_Generic(x):
     updateGPPOEntry.grid(row = 17, column = 0, columnspan=2, sticky = "nsew")
     updateGPPOButton = tk.Button(left, text = "Update Gas Panel PO", command = (lambda: setNewPO(chamber, updateGPPOEntry, gpPOEntry, 3)))
     updateGPPOButton.grid(row = 17, column = 2, columnspan = 2, sticky = "nsew")
-    createY7Button = tk.Button(left, text = "Create Y7", command = (lambda: createQN(chamberPO, chamber.system, "Y7")))
-    createY7Button.grid(row = 18, column = 0,columnspan=2, sticky = "nsew")
-    createY8Button = tk.Button(left, text = "Create Y8", command = (lambda: createQN(chamberPO, chamber.system, "Y8")))
-    createY8Button.grid(row = 18, column = 2,columnspan=2, sticky = "nsew")
+    createY7Button = tk.Button(left, text = "Create New QN",command = (lambda: createQN(chamberPO, chamber.system, "Y7")))
+    createY7Button.grid(row = 18, column = 0,columnspan=4, sticky = "nsew")
+##    createY8Button = tk.Button(left, text = "Create Y8",state=tk.DISABLED ,command = (lambda: createQN(chamberPO, chamber.system, "Y8")))
+##    createY8Button.grid(row = 18, column = 2,columnspan=2, sticky = "nsew")
     iomsButton = tk.Button(left, text = "Go to iOMS", command = (lambda: webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + chamberPO + "#!/")))
     iomsButton.grid(row = 19, column = 0, columnspan = 4, sticky = "nsew")
     create3DButton = tk.Button(left, text = "Create new 3D form", command = (lambda: webbrowser.get(chrome).open_new_tab("http://sppartner/sites/Global3D/Lists/VMORevision/Item/newifs.aspx")))
     create3DButton.grid(row = 20, column = 0, columnspan=4, sticky = "nsew")
 #http://dca-wb-263/QM/QM/CreateQN?prodId=1552105&qntype=Y8&slotno=B01487&plant=4070&source=PROMPT
 
-def change_bay(root, chamber_image, new_bay, entry, active_buttons, currentBayLabel):
+def change_bay(root, chamber_image, new_bay, entry, active_buttons, currentBayLabel, canvas, sectionTexts, statusTexts, updateTimeText):
     global chamber_locations, bay_num_str, bay_num
     entry.delete('0', 'end')
     try:
@@ -505,6 +540,10 @@ def change_bay(root, chamber_image, new_bay, entry, active_buttons, currentBayLa
         bay_num_str = new_bay
     except ValueError:
         return
+    for _ in range(6):
+        canvas.itemconfig(sectionTexts[_], text = "")
+        canvas.itemconfig(statusTexts[_], text = "")
+    canvas.itemconfig(updateTimeText, text = "Mayan progress not updated")
     delete_buttons()
     chamber_locations = findChamberLocations(bay_num)
     create_buttons(root, chamber_image, chamber_locations, active_buttons)
@@ -518,6 +557,36 @@ def delete_buttons():
         x.destroy()
     active_buttons.clear()
 
+def createDriver(hide):
+    options = Options()
+    options.headless = hide # set to False to see chrome window while running
+    options.add_argument("--window-size=1920,1200")
+    DRIVER_PATH = r"./driver/chromedriver.exe"
+    driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
+    return driver
+
+def updateMayanStatus(bay_num, canvas, sectionTexts, statusTexts, updateTimeText):
+    driver = createDriver(True)
+    for _ in range(6):
+        chamber = chambers[_ + (6 * (bay_num - 1))]
+        chamberPO = chamber.chPO
+        try:
+            driver.get("http://eagleeye_api/EagleEye/api/v1//MayanDetails?Production_Order=" + chamberPO)
+            WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "body > pre")))
+            x = driver.find_element_by_css_selector("body > pre").text#
+            y = json.loads(x)
+            #print(chamberPO)
+            section = y[0]["Current_Mayan_Section"].replace("-", " ")
+            #print(section)
+            currentTest = y[0]["Current_Mayan_Test"]
+            #print(currentTest)
+            canvas.itemconfig(sectionTexts[_], text=section)
+            canvas.itemconfig(statusTexts[_], text=currentTest)
+            canvas.itemconfig(updateTimeText, text="Mayan updated " + datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
+        except:
+            pass
+    driver.quit()
+    
 ########################NEED TO RESTORE FOCUS TO SECOND WINDOW AFTER CLOSING THIRD
 def updateAllBayQNs(bay_num):
     options = Options()
@@ -534,7 +603,7 @@ def updateAllBayQNs(bay_num):
 
     
 def updateBayQN(driver, po, ch):
-    driver.get("http://dca-wb-263/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
+    driver.get("http://dca-wb-281/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
     try:
         e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
         ch.QNs.clear()
@@ -570,7 +639,7 @@ def updateQNWholeBay(driver, po, ch, viewQNs, qnIdx):
     print(po)
     if po and (po != "XXXXX"):
         qnCount = 0
-        driver.get("http://dca-wb-263/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
+        driver.get("http://dca-wb-281/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
         try:
             e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
             ch.QNs.clear()
@@ -618,9 +687,9 @@ def updateQNWholeBay(driver, po, ch, viewQNs, qnIdx):
             if len(rows) != qnCount:
                 for r in rows:
                     try:
-                        lotDesc = r.find_element_by_class_name('ui-grid-coluiGrid-001B').text
+                        lotDesc = r.find_element_by_class_name('ui-grid-coluiGrid-001G').text
                         lotNum = r.find_element_by_css_selector('a.ng-binding').text
-                        lotStatus = r.find_element_by_class_name('ui-grid-coluiGrid-001F').text
+                        lotStatus = r.find_element_by_class_name('ui-grid-coluiGrid-001K').text
                         if lotStatus == "A":
                             lotOpen = False
                         else:
@@ -658,92 +727,69 @@ def updateQN(po, ch, viewQNs, qnIdx, driver = None):
             DRIVER_PATH = r"./driver/chromedriver.exe"
             driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
             externalDriver = False
-        driver.get("http://dca-wb-263/QM/QM/ViewQN?SlotNum=&ProdOrder=" + po)
+        driver.get("http://webmprd:3333/rest/AMAT_iOMS_SSG/api/getQN_LOT_DataFromSAP?ORD_NUMBER=" + po)
         try:
-            e = WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+            WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "body > pre")))#
+            x = driver.find_element_by_css_selector("body > pre").text#
+            y = json.loads(x)#
             ch.allQNs[qnIdx].clear()
-            rows = driver.find_elements_by_class_name("ui-grid-row")
-            for r in rows:
-                posPartNums = []
-                qnnum = r.find_element_by_css_selector('a.ng-binding').text
-                qnType = r.find_element_by_class_name('ui-grid-coluiGrid-000K').text
-                shortText = r.find_element_by_class_name('ui-grid-coluiGrid-000L').text
-                status = not r.find_element_by_xpath('.//input[@type="checkbox"]').is_selected()
-                partNum = r.find_element_by_class_name('ui-grid-coluiGrid-000M').text
-                if qnIdx == 0:
-                    if status:
-                        print(partNum)
-                        PN = fnmatch.filter(partNum.split(), '????-?????')
-                        if PN:
-                            partNum = PN
-                            ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
-                            continue
-                        else:
-                            PNReg = re.compile(r'\d{4}-\d{5}')
-                            foundPN = PNReg.search(shortText)
-                            if foundPN:
-                                print(qnnum)
-                                partNum = foundPN.group()
-                                print(partNum)
-                                ch.QNs.append(QN(qnnum, qnType, shortText, status, partNum))
+            if y["SAP_QN_DATA_RESPONSE"]["RESPONSE"]["QL_COUNT"] != "0":#
+                for q in y["SAP_QN_DATA_RESPONSE"]["RESPONSE"]["QN_DATA"]["QLNOTE"]:#
+                    posPartNums = []
+                    status = True if (q["ZZIMMFIX"] != "true") else False#
+                    partNum = q["MATNR"]
+                    if qnIdx == 0:
+                        if status:
+                            print(partNum)
+                            PN = fnmatch.filter(partNum.split(), '????-?????')
+                            if PN:
+                                partNum = PN
+                                ch.QNs.append(QN(q["QMNUM"], q["QMART"], q["QMTXT"], status, partNum[0]))#
                                 continue
-                    ch.QNs.append(QN(qnnum, qnType, shortText, status))
-                    qnCount = qnCount + 1
-                elif qnIdx == 1:
-                    ch.ctvQNs.append(QN(qnnum, qnType, shortText, status))
-                    qnCount = qnCount + 1
-                else:
-                    ch.gpQNs.append(QN(qnnum, qnType, shortText, status))
-                    qnCount = qnCount + 1
+                            else:
+                                PNReg = re.compile(r'\d{4}-\d{5}')
+                                foundPN = PNReg.search(q["QMTXT"])#
+                                if foundPN:
+                                    print(q["QMNUM"])#
+                                    partNum = foundPN.group()
+                                    print(partNum)
+                                    ch.QNs.append(QN(q["QMNUM"], q["QMART"], q["QMTXT"], status, partNum))#
+                                    continue
+                        ch.QNs.append(QN(q["QMNUM"], q["QMART"], q["QMTXT"], status))#
+                        qnCount = qnCount + 1
+                    else:
+                        ch.allQNs[qnIdx].append(QN(q["QMNUM"], q["QMART"], q["QMTXT"], status))
+
+                        
+            ch.allInspLots[qnIdx].clear()
+            if y["SAP_QN_DATA_RESPONSE"]["RESPONSE"]["INSLOT_COUNT"] != "0":
+                for i in y["SAP_QN_DATA_RESPONSE"]["RESPONSE"]["INSPECTION_DATA"]["INSLOT"]:
+                    status = True if (i["VBEWERTUNG"] != "A") else False
+                    ch.allInspLots[qnIdx].append(InspLot(i["PRUEFLOS"], i["KTEXT"], i["VBEWERTUNG"], status))             
         except:
             ch.allQNs[qnIdx].clear()
-
-        driver.find_element_by_xpath("/html/body/div[1]/div[1]/section/section/ul/li[2]/a").click()
-        time.sleep(3)
-        try:
-            e = WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
-            ch.allInspLots[qnIdx].clear()
-            rows = driver.find_elements_by_class_name("ui-grid-row")
-            if len(rows) != qnCount:
-                for r in rows:
-                    try:
-                        lotDesc = r.find_element_by_class_name('ui-grid-coluiGrid-001B').text
-                        lotNum = r.find_element_by_css_selector('a.ng-binding').text
-                        lotStatus = r.find_element_by_class_name('ui-grid-coluiGrid-001F').text
-                        if lotStatus == "A":
-                            lotOpen = False
-                        else:
-                            lotOpen = True
-                        ch.allInspLots[qnIdx].append(InspLot(lotNum, lotDesc, lotStatus, lotOpen))
-                    except:
-                        continue
-            else:
-                ch.allInspLots[qnIdx].clear()
-            if not externalDriver:
-                driver.quit()
-                print("quit")
-        except:
             ch.allInspLots[qnIdx].clear()
             if not externalDriver:
                 driver.quit()
                 print("quit")
-        for i in ch.allInspLots[qnIdx]:
-            print(i.print())
+        if not externalDriver:
+                driver.quit()
+                print("quit")
         if viewQNs:
             viewQN(ch, True, qnIdx)
         
 
 def createQN(po, system, qnType):
+    global user
     x = system.find("-")
     system = system[0:x]
-    print(system)
-    webbrowser.get(chrome).open_new_tab("http://dca-wb-263/QM/QM/CreateQN?prodId=" + po + "&qntype=" + qnType +"&slotno=" + system + "&plant=4070&source=PROMPT")
-
+    webbrowser.get(chrome).open_new_tab("http://qualitynotescm/QN?productionOrder=" + po +"&ntLoginID=" + user + "&application=prompt&slot=" + system + "&plant=4070&material=")
+    
 def openQN(qn):
     webbrowser.get(chrome).open_new_tab("https://epvpwd.amat.com:8065/com.amat.irj.portal?app=ChgQaNotif?RIWO00-QMNUM=0000" + qn)
 
 def openInspLot(il):
-    ebbrowser.get(chrome).open_new_tab("https://epvpwd.amat.com:8065/irj/portal/DisIL?QALS-PRUEFLOS=0" + il)
+    webbrowser.get(chrome).open_new_tab("https://epvpwd.amat.com:8065/irj/portal/DisIL?QALS-PRUEFLOS=" + il)
 ##ADD INSPLOTS
 def viewQN(ch, onlyOpen, qnId):
     status = ""
@@ -753,7 +799,7 @@ def viewQN(ch, onlyOpen, qnId):
                  "\n############################################################"
     else:
         status = "All QN's for " + ch.system
-    n = ttk.Notebook(left, height= 322)
+    n = ttk.Notebook(left, height= 323)
     f1 = ttk.Frame(n)
     f2 = ttk.Frame(n)
     f3 = ttk.Frame(n)
@@ -835,140 +881,145 @@ def getLastScanned(po, qn, text):
     options.add_argument("--window-size=1920,1200")
     DRIVER_PATH = r"./driver/chromedriver.exe"
     driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
-    driver.get("http://dca-app-833/LTSWeb/LTSPACKAGE")
-    #try:
-    WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="PO"]')))
-    poEntry = driver.find_element_by_xpath('//*[@id="PO"]')
-    poEntry.send_keys(po)
-    partNumEntry = driver.find_element_by_xpath('//*[@id="PN"]')
-    print(qn.partNum)
-    partNumEntry.send_keys(qn.partNum)
-
-    driver.find_element_by_xpath('//*[@id="btnSearch"]/i').click()
-    time.sleep(1)
-    s = driver.page_source
-    def compare_source(driver):
-        try:
-            return s != driver.page_source
-        except:
-            pass
-    WebDriverWait(driver, 20).until(compare_source)
-    s = driver.page_source
-    WebDriverWait(driver, 30).until(compare_source)
-    print(driver.execute_script("return jQuery.active == 0"))
-    time.sleep(5)
-    print(driver.execute_script("return jQuery.active == 0"))
-    try:
-        WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
-        row = driver.find_element_by_class_name("ui-grid-row")
-        #matNum = row.find_element_by_class_name('ui-grid-coluiGrid-000A').text
-        lastSeen = row.find_element_by_class_name("ui-grid-coluiGrid-000C").text
-        loc = row.find_element_by_class_name("ui-grid-coluiGrid-000F").text
-        driver.quit()
-        print(str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc)
-        text.delete('1.0', END)
-        text.insert(INSERT, (str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc))
-        qn.lastScanned = (str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc)
-    except:
+    link = "http://dca-app-833/LTSWeb/api/LTSPACKAGEAPI/SearchPackageDetails?RFID=&PartNumber=" + str(qn.partNum) + "&StockroomReq=&ProdOrder=" + po + "&WorkCenter=&Operation=&JobNumber="
+##    print(link)
+    driver.get(link)
+    WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "body > pre")))#
+    x = driver.find_element_by_css_selector("body > pre").text#
+    y = json.loads(x)
+    if y["recordsTotal"] == 0:
         driver.quit()
         text.delete('1.0', END)
         text.insert(INSERT, "No Data Found")
         qn.lastScanned = "No Data Found"
+    else:
+        loc = y["ltsPackagedata"][0]["LTS_LOCATIONDESIGNATION"]
+        lastSeen = y["ltsPackagedata"][0]["LAST_SEEN_TIME"][0:10]
+        text.delete('1.0', END)
+        text.insert(INSERT, (str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc))
+        qn.lastScanned = (str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc)
+        driver.quit()
+    return
+    #driver.get("http://dca-app-833/LTSWeb/LTSPACKAGE")
+##    #try:
+##    WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="PO"]')))
+##    poEntry = driver.find_element_by_xpath('//*[@id="PO"]')
+##    poEntry.send_keys(po)
+##    partNumEntry = driver.find_element_by_xpath('//*[@id="PN"]')
+##    print(qn.partNum)
+##    partNumEntry.send_keys(qn.partNum)
+##
+##    driver.find_element_by_xpath('//*[@id="btnSearch"]/i').click()
+##    time.sleep(1)
+##    s = driver.page_source
+##    def compare_source(driver):
+##        try:
+##            return s != driver.page_source
+##        except:
+##            pass
+##    WebDriverWait(driver, 20).until(compare_source)
+##    s = driver.page_source
+##    WebDriverWait(driver, 30).until(compare_source)
+##    print(driver.execute_script("return jQuery.active == 0"))
+##    time.sleep(5)
+##    print(driver.execute_script("return jQuery.active == 0"))
+##    try:
+##        WebDriverWait(driver, 5).until(EC.presence_of_element_located((By.CLASS_NAME, "ui-grid-row")))
+##        row = driver.find_element_by_class_name("ui-grid-row")
+##        #matNum = row.find_element_by_class_name('ui-grid-coluiGrid-000A').text
+##        lastSeen = row.find_element_by_class_name("ui-grid-coluiGrid-000C").text
+##        loc = row.find_element_by_class_name("ui-grid-coluiGrid-000F").text
+##        driver.quit()
+##        print(str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc)
+##        text.delete('1.0', END)
+##        text.insert(INSERT, (str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc))
+##        qn.lastScanned = (str(qn.partNum) + " Last seen: " + lastSeen + " in " + loc)
+##    except:
+##        driver.quit()
+##        text.delete('1.0', END)
+##        text.insert(INSERT, "No Data Found")
+##        qn.lastScanned = "No Data Found"
 
 
 #Open TLC for manual adding
 def opentlc(po):
-    webbrowser.get(chrome).open_new_tab("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/laborcosting")
+    r = Tk()
+    r.withdraw()
+    r.clipboard_clear()
+    r.clipboard_append(po)
+    r.update()
+    r.destroy()
+    webbrowser.get(chrome).open_new_tab("http://dca-wb-281/TLC/TLCLogHours/LogHoursSummary")
 
+    
 #Auto add tlc
 def addtlc(po):
-    
     options = Options()
     options.headless = False # set to False to see chrome window while running
     options.add_argument("--window-size=1920,1200")
     DRIVER_PATH = r"./driver/chromedriver.exe"
     driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
-    t = getUserTLC(driver)
-    if t < 8:
+    hrs = getUserTLC(driver)
+    print(hrs)
+    mins = "%02d" % random.randint(0,30)
+    print(mins)
+    driver.get("http://dca-wb-281/TLC/TLCLogHours/LogHoursSummary")
+    if hrs < 8:
+        hrsneeded = 8 - hrs
         try:
-            driver.get("http://ioms/MFG/ModuleStatus?PO=" + po + "#!/laborcosting")
-            time.sleep(5)
-            while True:
-                try:
-                    but = WebDriverWait(driver, 35).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#laborcosting > div > div > div > div > div:nth-child(6) > div.col-md-5.col-sm-6 > div > button:nth-child(1) > span')))
-                    print("is clickable")
-                    time.sleep(1)
-                    but.click()
-                    break
-                except:
-                    pass
-            op = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(1) > div.col-md-4 > select')))
+            addButton = WebDriverWait(driver, 35).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#AddHoursid')))
+            addButton.click()
             time.sleep(1)
-            op.click()
-            modtest = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(1) > div.col-md-4 > select > option.ng-binding.ng-scope')))
+            tlcPO = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#tlc_prd_orders')))
+            tlcPO.click()
             time.sleep(1)
-            modtest.click()
-            atype = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(3) > div.col-md-4 > select')))
+            tlcPO.send_keys(po)
+            tlcPOSelect = WebDriverWait(driver, 15).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#ui-id-7 > li')))
+            print("po loaded")
+            tlcPhase = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#Phase')))
+            tlcPhase.click()
+            phaseSelect = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,"#Phase > option:nth-child(4)")))
+            phaseSelect.click()
             time.sleep(1)
-            atype.click()
-            stnd = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(3) > div.col-md-4 > select > option:nth-child(3)')))
+            tlcOP = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#OperationId')))
+            tlcOP.click()
+            opSelect = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH,'//*[@id="0160"]')))
+            opSelect.click()
             time.sleep(1)
-            stnd.click()
-            hrs = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(7) > div.col-md-4 > div > input:nth-child(1)')))
-            mins = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-body.mdbody > div:nth-child(7) > div.col-md-4 > div > input:nth-child(2)')))
-            time.sleep(1)
-            hours = 8 - t  
-            hrs.send_keys(str(8-t))
-            time.sleep(1)
-##            hrs.clear()
-##            hrs.send_keys("0")
-##            mins.send_keys("1")
-            save = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#addTestRecord > div > div > form > div.modal-footer.mdfooter > button.btn.btn-primary')))
-            print("click save")
-            #time.sleep(10)
-            #save.click()
-            addedtime = WebDriverWait(driver, 60).until(EC.presence_of_element_located((By.XPATH, '//*[@id="userTable"]/tbody/tr/td[7]'))).text
-            print("tlc successfully added, total tlc is " + str(t + addedtime))
-            return("tlc successfully added, total tlc is " + str(t + addedtime))
-            driver.quit()
+            tlcInstruction = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#OmsIndexId')))
+            tlcInstruction.click()
+            instructionSelect = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH, '//*[@id="200"]')))
+            instructionSelect.click()
+            startTime = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#timepicker_start')))
+            startTime.click()
+            startTime.send_keys("0600")
+            endTime = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#timepicker_end')))
+            endTime.click()
+            if hrsneeded >= 4:
+                endTime.send_keys(str(hrsneeded + 6) + mins)
+            else:
+                endTime.send_keys("0" + str(hrsneeded + 6) + mins)
+##            saveButton = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#btnSave')))
+##            saveButton.click()
+##            time.sleep(2)
+##            WebDriverWait(driver, 35).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#AddHoursid')))
+##            print("successfully added " + hrs + mins)
         except:
-            print("unable to add tlc or site took too long to respond, please add tlc manually")
-            return "unable to add tlc or site took too long to respond, please add tlc manually"
-        driver.quit()
-    else:
-        print("tlc already above 8 hours no need to add more")
-        return "tlc already above 8 hours no need to add more"
-        driver.quit()
-#Before callng addtlc verify time is less than 8 hrs and time is int
-
+            print("Error adding TLC, please add manually.")
 
 def getUserTLC(driver):
-    driver.get("http://dca-wb-263/PROMPT/ToolLaborCost/BiWeeklyTLC")
-    s = driver.page_source
-    print(s)
-    def compare_source(driver):
-        try:
-            return s != driver.page_source
-        except:
-            pass
-    print(s)
-    WebDriverWait(driver, 10).until(compare_source)
-    time.sleep(2)
-    while True:
-        if driver.execute_script("return jQuery.active == 0"):
-            e = driver.find_element_by_xpath('//*[@id="BiWeeklyContainer"]/div/div[5]/span[2]').text
-            print(e)
-            break
-        else:
-            time.sleep(1)
-    print(e[0])
-    return int(e[0])
-
+    global today
+    global empNum
+    driver.get("http://dca-app-1445/TLCAPI/api/TLCLogHoursApi/?userid=" + empNum + "&currentDate=" + today + "&plant=null")
+    x = driver.find_element_by_css_selector("body > pre").text
+    y = json.loads(x)
+    hrs = 0
+    for _ in y:
+        hrs = hrs + float(_["sapDecimalHours"])
+    print(hrs)
+    return int(round(hrs))
     
-#def openUserTLC():
-     #webbrowser.get(chrome).open_new_tab("http://dca-wb-263/PROMPT/ToolLaborCost/BiWeeklyTLC")
-     
-
+    
 
 #def updateLastTestRan(bay_num_str, port):
     # TODO: implement 
@@ -982,7 +1033,7 @@ def setNewPO(ch, new, old, poType):
     old.delete('1.0', END)
     po = new.get()
     new.delete('0', 'end')
-    t = ("Chamber PO: " if poType == 1 else ("CTV PO: " if poType == 2 else "GP PO: ")) + po
+    t = ("" if poType == 0 else ("Chamber PO: " if poType == 1 else ("CTV PO: " if poType == 2 else "GP PO: "))) + po
     old.insert(1.0, t)
     old.tag_configure("center", justify='center')
     old.tag_add("center", "1.0", "end")
@@ -1036,16 +1087,26 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.dirname(__file__)
     return os.path.join(base_path, relative_path)
-    
-############################################################ MAIN PROGRAM BEGINS ########################################################################
-print(datetime.today())
-skip = True
 
+
+
+
+############################################################ MAIN PROGRAM BEGINS ########################################################################
+today = datetime.today().strftime("%m/%d/%y")
+print(today)
+skip = True
+isContractor = False
+user = os.getlogin()
+if fnmatch.fnmatch(user, "*x[0-9]*"):
+    isContractor = True
+    empNum = "x" + re.sub("[^0-9]", "", user)
+else:
+    empNum = re.sub("[^0-9]", "", user)
 rackStatus = load_workbook(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\EQRK Status.xlsx')
 rackStatusSheet = rackStatus["Sheet1"]
 manualPOsFile = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx'
 passdownPath = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\SUPERVISOR PASSDOWN\LEADS Passdown\LEADS PASSDOWN*.xlsx'
-crossoverPath = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\SUPERVISOR PASSDOWN\( DTF Checklists for Systems )\(TEST QUEUE )\TEST QUEUE*.xlsx'
+crossoverPath = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\(DTF Checklists - TEST QUEUE)\(TEST QUEUE )\TEST QUEUE*.xlsx'
 manualPOPath = (r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx')
 chrome = "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s"
 crossoverFile = getLatestFile(crossoverPath)
@@ -1055,7 +1116,7 @@ passdownFile = getLatestFile(passdownPath)
 print(passdownFile)
 passdownPath = passdownPath.replace("LEADS PASSDOWN*.xlsx", passdownFile)
 chamber_image_file = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\chamber.png'
-bay_image_file = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\baydrawingNEW.png'
+bay_image_file = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\baydrawingNEW2.png'
 chambers = []
 cells = []
 active_buttons = []
@@ -1063,18 +1124,35 @@ chamber_locations = [1,1,1,1,1,1]
 ports = ["A","B","C","D","E","F"]
 
 getPriorityColors(passdownPath, cells)
-
-data = pd.read_excel(crossoverPath, sheet_name= 'QUEUE', usecols = 'F:H', dtype=str, skiprows = 5)
+#Create a datarame with columns System#, Chamber PO#, CH Type
+#Drop extra lines at beginning of excel sheet
+data = pd.read_excel(crossoverPath, sheet_name= 'QUEUE', usecols = 'F:H', dtype=str)#, skiprows = 5)
 dfCrossover = pd.DataFrame(data)
+startIndex = dfCrossover.loc[dfCrossover['Unnamed: 5'] == 'Slot /Sys - Ch# '].index[0]
+dfCrossover.drop(dfCrossover.index[:startIndex+1], inplace=True)
+dfCrossover.reset_index(drop=True,inplace=True)
+dfCrossover.rename(columns={"Unnamed: 5": "Slot /Sys - Ch# ", "Unnamed: 6": "Build PO#", "Unnamed: 7":"CH Type"}, inplace=True)
+#
 data = pd.read_excel(manualPOPath, sheet_name = 'Sheet1', usecols = 'A:E', dtype = str)
 manualDF = pd.DataFrame(data)
 
 bay_num_str = "8"
 bay_num = 8
-
 data = pd.read_excel(passdownPath)
-df = pd.DataFrame(data, columns= ['Bay ','System #', 'Status Of Chamber', 'Passdown Issues','START Date','Port Days'])
+df = pd.DataFrame(data, columns= ['Bay ','System #', 'Status Of Chamber', ' ','START Date','Port Days'])#Passdown Issues
+df.drop(df.index[[36, 37, 54, 55]], inplace=True)
+df.reset_index(drop=True, inplace=True)
+print(df)
 
+manualPOs = load_workbook(manualPOsFile)
+ws = manualPOs.active
+rows = list(ws.rows)
+for i in range(60):
+    if df.at[i, "System #"] != manualDF.at[i, "System"]:
+        for x in range(2,6):
+            ws.cell(column=x, row=i + 2, value="")
+manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx')
+    
 getPOs(chambers)
 chamber_locations = findChamberLocations(bay_num)
 print(chamber_locations)
@@ -1082,43 +1160,58 @@ print(chamber_locations)
 root = tk.Tk()
 root.title("Bay Status")
 w = 1654
-h = 900
+h = 932#900
 ws = root.winfo_screenwidth() # width of the screen
 hs = root.winfo_screenheight() # height of the screen
 x = (ws/2) - (w/2)
 y = (hs/2) - (h/2)
 root.geometry('%dx%d+%d+%d' % (w, h, x, y-40))
 root.resizable(False, False)
-##root.columnconfigure(0,weight=1)
-#root.rowconfigure(0,weight=1)
-#canvas = Canvas(root, width=1154, height=881)
 bay_image = ImageTk.PhotoImage(file = bay_image_file)
 
 topframe = tk.Frame(root, height=40, bg="#4599C3", bd=1, relief=SOLID)
-middleframe = tk.PanedWindow(root, height =845)
+topframe.columnconfigure(7, weight=1)
+middleframe = tk.PanedWindow(root, height =872)#845
 topframe.pack(side="top", fill="x", expand=True)
 middleframe.pack(fill="both")#side="top", fill="both", expand=True)
-left = tk.Frame(middleframe, width=500,height=845, bg="blue", bd=1, relief=SOLID)
+left = tk.Frame(middleframe, width=500,height=872, bg="blue", bd=1, relief=SOLID)
 left.columnconfigure(3,weight=1)
 #left.columnconfigure(1,weight=1)
 middleframe.paneconfig(left, minsize=500)
-right = tk.Frame(middleframe, width =1154,height=845, bg="red",bd=1,relief=SOLID)
+right = tk.Frame(middleframe, width =1154,height=872, bg="red",bd=1,relief=SOLID)
 middleframe.paneconfig(right, minsize=1154)
 middleframe.add(left)
 
 middleframe.add(right)
 canvas = Canvas(right, width=1154, height=881)
 canvas.create_image(575,450, image = bay_image)
+mayanSectionTexts = []
+mayanStatusTexts = []
+aMayanSection = canvas.create_text(670,100, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="")
+bMayanSection = canvas.create_text(670,360, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="")
+cMayanSection = canvas.create_text(670,640, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="")
+fMayanSection = canvas.create_text(450,100, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="")
+eMayanSection = canvas.create_text(450,360, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="")
+dMayanSection = canvas.create_text(450,640, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="")
+mayanSectionTexts.extend([aMayanSection,bMayanSection,cMayanSection,dMayanSection,eMayanSection,fMayanSection])
+aMayanStatus = canvas.create_text(670,170, width =205, justify = tk.CENTER, fill="black", font="Helvetica 12", text="")
+bMayanStatus = canvas.create_text(670,430, width =205, justify = tk.CENTER, fill="black", font="Helvetica 12", text="")
+cMayanStatus = canvas.create_text(670,710, width =205, justify = tk.CENTER, fill="black", font="Helvetica 12", text="")
+fMayanStatus = canvas.create_text(450,160, width =205, justify = tk.CENTER, fill="black", font="Helvetica 12", text="")
+eMayanStatus = canvas.create_text(450,420, width =205, justify = tk.CENTER, fill="black", font="Helvetica 12", text="")
+dMayanStatus = canvas.create_text(450,710, width =205, justify = tk.CENTER, fill="black", font="Helvetica 12", text="")
+mayanStatusTexts.extend([aMayanStatus,bMayanStatus,cMayanStatus,dMayanStatus,eMayanStatus,fMayanStatus])
+mayanUpdateTimeText = canvas.create_text(550,820, justify=tk.CENTER, fill="black", font = "Helvetica 12 bold", text ="Mayan progress not updated")
+
 canvas.pack()
-
-
 
 currentBayLabel = tk.Label(topframe, bg="#4599C3",font="Helvetica 32 bold", text = "Now Viewing Bay " + bay_num_str)
 currentBayLabel.grid(row = 0, column = 0, rowspan=2, sticky = "w")
 new_bay_entry = tk.Entry(topframe)
 ##new_bay_entry.configure(bg=root.cget('bg'), relief="flat")
 new_bay_entry.grid(row = 0, column = 2, sticky = "nsew")#pack()
-refresh_button = tk.Button(topframe, text = "Change bay", command = (lambda: change_bay(root, chamber_image, new_bay_entry.get(), new_bay_entry, active_buttons, currentBayLabel)))#locations
+refresh_button = tk.Button(topframe, text = "Change bay", command = (lambda: change_bay(root, chamber_image, new_bay_entry.get(), new_bay_entry, active_buttons,\
+                                                                                        currentBayLabel, canvas, mayanSectionTexts, mayanStatusTexts, mayanUpdateTimeText)))#locations
 refresh_button.grid(row = 0, column = 3, sticky = "nsew")#pack()
 rackStatusEntry = tk.Entry(topframe)
 rackStatusEntry.grid(row = 1, column = 2, sticky = "nsew")#pack()
@@ -1130,17 +1223,21 @@ updateAllBayQNsButton = tk.Button(topframe, text = "Update all Chamber QNs", com
 updateAllBayQNsButton.grid(row = 1, column = 5,sticky="nsew")#pack()
 updateAllBayQNsButton = tk.Button(topframe, text = "Update all QNs for bay", command = (lambda: updateAllQNsOnAllChambers(bay_num)))
 updateAllBayQNsButton.grid(row = 1, column = 6,sticky="nsew")#pack()
+updateMayanBayButton = tk.Button(topframe, text = "Update Mayan Progress", command = (lambda: updateMayanStatus(bay_num, canvas, mayanSectionTexts, mayanStatusTexts, mayanUpdateTimeText)))
+updateMayanBayButton.grid(row = 1, column = 7, sticky = "nsew")
+userLabel = tk.Label(topframe, bg="#4599C3",font="Helvetica 16", text = "Signed in as: " + user)
+userLabel.grid(row = 1, column = 8, sticky = "e")
 
-##topSeparator =  ttk.Separator(left, orient = HORIZONTAL)
-##topSeparator.grid(row=2,column=0,columnspan=6,rowspan=2,sticky="nsew" )
-##canvas.create_image(575,450, image = bay_image)
 
-##
-##
-##canvas.grid(row = 3, column = 1, columnspan = 4)#pack()
 chamber_image = PhotoImage(file = chamber_image_file)
 
 create_buttons(root, chamber_image, chamber_locations, active_buttons)
-create_window_Generic(0)
+count = 0
+while(True):
+    try:
+        create_window_Generic(count)
+        break
+    except:
+        count = count + 1
 
 root.mainloop()
