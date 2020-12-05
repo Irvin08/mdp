@@ -532,7 +532,7 @@ def create_window_Generic(x):
     create3DButton.grid(row = 20, column = 0, columnspan=4, sticky = "nsew")
 #http://dca-wb-263/QM/QM/CreateQN?prodId=1552105&qntype=Y8&slotno=B01487&plant=4070&source=PROMPT
 
-def change_bay(root, chamber_image, new_bay, entry, active_buttons, currentBayLabel, canvas, sectionTexts, statusTexts, updateTimeText):
+def change_bay(root, chamber_image, new_bay, entry, active_buttons, currentBayLabel, canvas, sectionTexts, statusTexts, updateTimeText, percentTexts):
     global chamber_locations, bay_num_str, bay_num
     entry.delete('0', 'end')
     try:
@@ -543,6 +543,7 @@ def change_bay(root, chamber_image, new_bay, entry, active_buttons, currentBayLa
     for _ in range(6):
         canvas.itemconfig(sectionTexts[_], text = "")
         canvas.itemconfig(statusTexts[_], text = "")
+        canvas.itemconfig(percentTexts[_], text = "-")
     canvas.itemconfig(updateTimeText, text = "Mayan progress not updated")
     delete_buttons()
     chamber_locations = findChamberLocations(bay_num)
@@ -564,6 +565,31 @@ def createDriver(hide):
     DRIVER_PATH = r"./driver/chromedriver.exe"
     driver = webdriver.Chrome(options=options, executable_path=resource_path(DRIVER_PATH))
     return driver
+
+def updateBuildStatus(bay_num, canvas, percentTexts):
+    driver = createDriver(True)
+    for _ in range(6):
+        chamber = chambers[_ + (6 * (bay_num - 1))]
+        chamberPO = chamber.chPO
+        try:
+            driver.get("http://eagleeye_api/EagleEye/api/v1//OperationBuild/" + chamberPO)
+            WebDriverWait(driver, 15).until(EC.presence_of_element_located((By.CSS_SELECTOR, "body > pre")))
+            x = driver.find_element_by_css_selector("body > pre").text#
+            y = json.loads(x)
+            total = 0
+            count = 0
+            for OP in y:
+                if OP["POB_ID"] != 0 and OP["Operation"] not in ("Module Test", "CP", "F50"):
+                    total = total + OP["Build_Percentage"]
+                    count = count + 1
+            overallPercent = int(total/count)
+    ##        print("Build %: " + str(overallPercent))
+    ##        print("Total OPs: " + str(count))
+            canvas.itemconfig(percentTexts[_], text=(str(overallPercent) + "%"))
+        except:
+            pass
+    driver.quit()
+    
 
 def updateMayanStatus(bay_num, canvas, sectionTexts, statusTexts, updateTimeText):
     driver = createDriver(True)
@@ -964,8 +990,10 @@ def addtlc(po):
     mins = "%02d" % random.randint(0,30)
     print(mins)
     driver.get("http://dca-wb-281/TLC/TLCLogHours/LogHoursSummary")
+    print(hrs)
     if hrs < 8:
         hrsneeded = 8 - hrs
+        print(hrsneeded)
         try:
             addButton = WebDriverWait(driver, 35).until(EC.element_to_be_clickable((By.CSS_SELECTOR, '#AddHoursid')))
             addButton.click()
@@ -983,6 +1011,9 @@ def addtlc(po):
             time.sleep(1)
             tlcOP = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR,'#OperationId')))
             tlcOP.click()
+            opSelect = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH,'//*[@id="0160"]')))
+            opSelect.click()
+            time.sleep(1)
             opSelect = WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.XPATH,'//*[@id="0160"]')))
             opSelect.click()
             time.sleep(1)
@@ -1017,7 +1048,7 @@ def getUserTLC(driver):
     for _ in y:
         hrs = hrs + float(_["sapDecimalHours"])
     print(hrs)
-    return int(round(hrs))
+    return int(hrs)
     
     
 
@@ -1148,7 +1179,7 @@ manualPOs = load_workbook(manualPOsFile)
 ws = manualPOs.active
 rows = list(ws.rows)
 for i in range(60):
-    if df.at[i, "System #"] != manualDF.at[i, "System"]:
+    if df.at[i, "System #"].strip() != manualDF.at[i, "System"]:
         for x in range(2,6):
             ws.cell(column=x, row=i + 2, value="")
 manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx')
@@ -1187,6 +1218,8 @@ canvas = Canvas(right, width=1154, height=881)
 canvas.create_image(575,450, image = bay_image)
 mayanSectionTexts = []
 mayanStatusTexts = []
+buildPercentTexts = []
+buildLabelTexts = []
 aMayanSection = canvas.create_text(670,100, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="")
 bMayanSection = canvas.create_text(670,360, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="")
 cMayanSection = canvas.create_text(670,640, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="")
@@ -1202,6 +1235,20 @@ eMayanStatus = canvas.create_text(450,420, width =205, justify = tk.CENTER, fill
 dMayanStatus = canvas.create_text(450,710, width =205, justify = tk.CENTER, fill="black", font="Helvetica 12", text="")
 mayanStatusTexts.extend([aMayanStatus,bMayanStatus,cMayanStatus,dMayanStatus,eMayanStatus,fMayanStatus])
 mayanUpdateTimeText = canvas.create_text(550,820, justify=tk.CENTER, fill="black", font = "Helvetica 12 bold", text ="Mayan progress not updated")
+aBuildPercent = canvas.create_text(1050,160, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="-")
+bBuildPercent = canvas.create_text(1050,420, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="-")
+cBuildPercent = canvas.create_text(1050,700, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="-")
+fBuildPercent = canvas.create_text(50,160, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="-")
+eBuildPercent = canvas.create_text(50,420, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="-")
+dBuildPercent = canvas.create_text(50,700, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="-")
+buildPercentTexts.extend([aBuildPercent,bBuildPercent,cBuildPercent,dBuildPercent,eBuildPercent,fBuildPercent])
+aBuildLabel = canvas.create_text(1050,130, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="Build:")
+bBuildLabel = canvas.create_text(1050,390, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="Build:")
+cBuildLabel = canvas.create_text(1050,670, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="Build:")
+fBuildLabel = canvas.create_text(50,130, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="Build:")
+eBuildLabel = canvas.create_text(50,390, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="Build:")
+dBuildLabel = canvas.create_text(50,670, width =205, justify = tk.CENTER, fill="black", font="Helvetica 14 bold", text="Build:")
+buildPercentTexts.extend([aBuildLabel,bBuildLabel,cBuildLabel,dBuildLabel,eBuildLabel,fBuildLabel])
 
 canvas.pack()
 
@@ -1211,7 +1258,7 @@ new_bay_entry = tk.Entry(topframe)
 ##new_bay_entry.configure(bg=root.cget('bg'), relief="flat")
 new_bay_entry.grid(row = 0, column = 2, sticky = "nsew")#pack()
 refresh_button = tk.Button(topframe, text = "Change bay", command = (lambda: change_bay(root, chamber_image, new_bay_entry.get(), new_bay_entry, active_buttons,\
-                                                                                        currentBayLabel, canvas, mayanSectionTexts, mayanStatusTexts, mayanUpdateTimeText)))#locations
+                                                                                        currentBayLabel, canvas, mayanSectionTexts, mayanStatusTexts, mayanUpdateTimeText, buildPercentTexts)))#locations
 refresh_button.grid(row = 0, column = 3, sticky = "nsew")#pack()
 rackStatusEntry = tk.Entry(topframe)
 rackStatusEntry.grid(row = 1, column = 2, sticky = "nsew")#pack()
@@ -1225,8 +1272,10 @@ updateAllBayQNsButton = tk.Button(topframe, text = "Update all QNs for bay", com
 updateAllBayQNsButton.grid(row = 1, column = 6,sticky="nsew")#pack()
 updateMayanBayButton = tk.Button(topframe, text = "Update Mayan Progress", command = (lambda: updateMayanStatus(bay_num, canvas, mayanSectionTexts, mayanStatusTexts, mayanUpdateTimeText)))
 updateMayanBayButton.grid(row = 1, column = 7, sticky = "nsew")
+updateBuildButton = tk.Button(topframe, text = "Update Build %", command = (lambda: updateBuildStatus(bay_num, canvas, buildPercentTexts)))
+updateBuildButton.grid(row = 1, column = 8, sticky = "nsew")
 userLabel = tk.Label(topframe, bg="#4599C3",font="Helvetica 16", text = "Signed in as: " + user)
-userLabel.grid(row = 1, column = 8, sticky = "e")
+userLabel.grid(row = 1, column = 9, sticky = "e")
 
 
 chamber_image = PhotoImage(file = chamber_image_file)
