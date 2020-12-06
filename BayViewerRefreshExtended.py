@@ -1130,13 +1130,13 @@ ports = ["A","B","C","D","E","F","G","H"]
 getPriorityColors(passdownPath, cells)
 #Create a datarame with columns System#, Chamber PO#, CH Type
 #Drop extra lines at beginning of excel sheet
-data = pd.read_excel(crossoverPath, sheet_name= 'QUEUE', usecols = 'F:H', dtype=str)#, skiprows = 5)
+data = pd.read_excel(crossoverPath, sheet_name= 'QUEUE', usecols = 'G:I', dtype=str)#, skiprows = 5)
 dfCrossover = pd.DataFrame(data)
 print(dfCrossover[0:10])
-startIndex = dfCrossover.loc[dfCrossover['Unnamed: 5'] == 'Slot /Sys - Ch# '].index[0]
+startIndex = dfCrossover.loc[dfCrossover['Unnamed: 6'] == 'Slot /Sys - Ch# '].index[0]
 dfCrossover.drop(dfCrossover.index[:startIndex+1], inplace=True)
 dfCrossover.reset_index(drop=True,inplace=True)
-dfCrossover.rename(columns={"Unnamed: 5": "Slot /Sys - Ch# ", "Unnamed: 6": "Build PO#", "Unnamed: 7":"CH Type"}, inplace=True)
+dfCrossover.rename(columns={"Unnamed: 6": "Slot /Sys - Ch# ", "Unnamed: 7": "Build PO#", "Unnamed: 8":"CH Type"}, inplace=True)
 #
 data = pd.read_excel(manualPOPath, sheet_name = 'Sheet1', usecols = 'A:E', dtype = str)
 manualDF = pd.DataFrame(data)
