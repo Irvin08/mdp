@@ -507,5 +507,5 @@ tk.Checkbutton(root, text="Get RCTD/SHIP dates", variable=rctdSelect).grid(row =
 QNCheckButton = tk.Button(root, text = "Get Update", command = (lambda: runUpdater(POEntry, qns, text, qnSelect.get(), ilSelect.get(), eswSelect.get(), allSelect.get(), includeClosed.get(),\
                                                                                    rctdSelect.get()))).grid(row = 0, column = 2, sticky = "nsew")
 ##rctdChekButton = tk.Button(root, text = "Check RCTD", command = (lambda: runRCTD(POEntry)))
-creditLabel = tk.Label(root, text = "IC  v1.8").grid(row = 2, column = 7 , sticky = "se")
+creditLabel = tk.Label(root, text = "IC  v1.8.1").grid(row = 2, column = 7 , sticky = "se")
 root.mainloop()
