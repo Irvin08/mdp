@@ -5,7 +5,7 @@
 #in MDP Final Test
 #Add last scanned to copy qns to clipboard button
 
-
+#import ctypes
 import pandas as pd
 from datetime import datetime, timedelta
 from datetime import timezone
@@ -75,6 +75,7 @@ class Chamber:
         self.mayanUpdateTimestamp = ""
         self.buildPercent = "-"
         self.color = None
+        self.rackStatus = ""
 
     def __str__(self):
         return 'System #:{}, PO #: {}'.format(self.system,self.chPO)
@@ -284,8 +285,10 @@ def getPOs(chambers):
         port = port.replace("Bay ", "").strip()
         skip = False
         done = False
+        found = False
         y = df.at[x, 'System #']
-        y = y.replace(" ", "")        
+        y = y.replace(" ", "")
+        print(y)
         if "EMPTY" in y:
             chambers.append(Chamber(port, "XXXXX-X", "XXXXX", "XXXXX", "XXXXX", "XXXXX", x))
             skip = True
@@ -297,6 +300,8 @@ def getPOs(chambers):
                 try:
                     r = dfCrossover.loc[dfCrossover['Slot /Sys - Ch# '].astype(str).str.contains(y)]
                     chambers.append(Chamber(port, y, r.values[0,1], "XXXXX", "XXXXX", r.values[0,2], x))
+                    print(y)
+                    found = True
                 except IndexError:
                     #y = y.replace("D01", "")
                     temp = y.replace("D01", "")
@@ -310,7 +315,7 @@ def getPOs(chambers):
                     found = True
                 except IndexError:
                     pass
-            r = rows[x + 1]               
+            r = rows[x + 1]
             if r[1].value == y:
                 init = [port, y, po, None, None, chtype, x]
                 z = [cell.value for cell in r]
@@ -334,7 +339,7 @@ def setNewPO(ch, new, old, poType):
     old.tag_configure("center", justify='center')
     old.tag_add("center", "1.0", "end")
     old.configure(state="disabled")
-    manualPOsFile = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx'
+    manualPOsFile = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOsUnited.xlsx'
     manualPOs = load_workbook(manualPOsFile)
     ws = manualPOs.active
     found = False
@@ -343,11 +348,12 @@ def setNewPO(ch, new, old, poType):
     if r[1].value == ch.system:
         found = True
         r[poType + 2].value = po
-        manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx')
+        manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOsUnited.xlsx')
     if found == False:
+        print("writing new value")
         ws.cell(column=2, row=ch.portIdx + 2, value=ch.system)
         ws.cell(column=(poType + 2), row=ch.portIdx + 2, value=po)
-        manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx')
+        manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOsUnited.xlsx')
     if poType == 0:
         ch.system = po
     elif poType == 1:
@@ -378,6 +384,46 @@ def getPriorityColors(file, chambers):
             #cells.append((255, 255, 255))
     #del cells[0]
 
+
+def getERackStatusForBay(bay):
+    for ch in bays[bay].chambers:
+        getERackStatus(ch)
+
+#To do
+def getERackStatus(chamber):
+    system = chamber.system
+    rows = rackStatusSheet.iter_rows(rackStatusSheet.max_row - 200, rackStatusSheet.max_row)
+    racks = ["EQRK1", "EQRK2", "EQRK3", "EQRK4"]
+    status = ""
+    found = False
+    ch = system[-1]
+    sys = system[:-2]
+    missingCount = 0
+    missingRacks = []
+    for row in rows:
+        if row[0].value == sys:
+            found = True
+            for x in range(8,12):
+                if "NA" in str(row[x].value):
+                    continue
+                elif row[x].value == None:
+                    if ch in str(row[x].comment):
+                        missingCount = missingCount + 1
+                        missingRacks.append(racks[x-8])
+                else:
+                    continue
+            try:
+                status = "\nComments:\n" + row[12].value
+            except:
+                pass
+    if missingRacks:
+        #print("Rack status: Missing " + ', '.join(missingRacks) + " for " + system + "." + status)
+        #return ("Rack status: Missing " + ', '.join(missingRacks) + " for " + system + "." + status)
+        chamber.rackStatus = ("Rack status: Missing " + ', '.join(missingRacks) + " for " + system + "." + status)
+    else:
+        #print("Rack status: All racks complete for " + system + ".")
+        #return ("Rack status: All racks complete for " + system + ".")
+        chamber.rackStatus = ("Rack status: All racks complete for " + system + ".")
 
 #Gets and displays erack data for given system in a new window
 def printStatus(system):
@@ -824,7 +870,8 @@ def updateAllDataForAllPorts(bay, sectionTexts, statusTexts, updateTimeText, per
     for b in bays[1:]:
         updateMayanStatusForAllPorts(b.bayNumber, driver)
         getBuildStatus(b.bayNumber, driver)
-    print("MAYAN/BUILD DONE AT " + datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
+        getERackStatusForBay(b.bayNumber)
+    print("MAYAN/BUILD/EQRK DONE AT " + datetime.now().strftime("%m/%d/%Y %H:%M:%S"))
     end = time.time()
     print("Took " + str(end-start) + " seconds")
     drawBuildStatus(bay, percentTexts)
@@ -850,6 +897,8 @@ def updateAllDataForBay(bay, sectionTexts, statusTexts, updateTimeText, percentT
     print("Mayan done")
     getBuildStatus(bay, driver)
     print("Build done")
+    getERackStatusForBay(bay)
+    print("EQRK done")
     driver.quit()
     drawBuildStatus(bay, percentTexts)
     drawMayanStatus(bay, sectionTexts, statusTexts, updateTimeText)
@@ -1216,7 +1265,8 @@ def generateFloorReport():
                         except:
                             chStatus = "ERROR"
                             pass
-                        result = result + "Passdown: " + chStatus + "\nMayan Status: " + ch.currentMayanSection + "\n\n   QNs:\n"
+                        result = result + "Passdown: " + chStatus + "\nMayan Status: " + ch.currentMayanSection + "\n"
+                        result = result + ch.rackStatus + "\n\n   QNs:\n"
                         for qn in ch.QNs:
                             if qn.isOpen:
                                 result = result + "\t" + qn.print()
@@ -1235,7 +1285,7 @@ def generateFloorReport():
     else:
         print("Please udpate all data")
 
-
+##CHANGE GET REPORT TO SET A CHAMBER PROPERTY
 def generateBayReport(bay):
     global bayDataUpdated
     ports = ["A", "B", "C", "D", "E", "F", "G", "H"]
@@ -1254,7 +1304,8 @@ def generateBayReport(bay):
                         except:
                             chStatus = "ERROR"
                             pass
-                        result = result + "Passdown: " + chStatus + "\nMayan Status: " + ch.currentMayanSection + "\n\n   QNs:\n"
+                        result = result + "Passdown: " + chStatus + "\nMayan Status: " + ch.currentMayanSection + "\n"
+                        result = result + ch.rackStatus + "\n\n   QNs:\n"
                         for qn in ch.QNs:
                             if qn.isOpen:
                                 result = result + "\t" + qn.print()
@@ -1277,6 +1328,7 @@ def generateBayReport(bay):
 
 ############################################################ MAIN PROGRAM BEGINS ########################################################################
 #pd.set_option('display.max_columns', 30)
+#ctypes.windll.shcore.SetProcessDpiAwareness(2) # this could only be used when your version of windows >= 8.1
 manualPOsFile = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOsUnited.xlsx'
 passdownPath = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\SharepointTest\LEADS PASSDOWN*.xlsx'
 crossoverPath = r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\(DTF Checklists - TEST QUEUE)\(TEST QUEUE )\TEST QUEUE*.xlsx'
@@ -1356,7 +1408,7 @@ for i in range(66):
     if df.at[i, "System #"].strip() != manualDF.at[i, "System"]:
         for x in range(2,6):
             ws.cell(column=x, row=i + 2, value="")
-manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOs.xlsx')
+manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOsUnited.xlsx')
     
 getPOs(chambers)
 getPriorityColors(passdownPath, chambers)
@@ -1386,11 +1438,11 @@ topframe.columnconfigure(7, weight=1)
 middleframe = tk.PanedWindow(root, height =950)#845
 topframe.pack(side="top", fill="x", expand=True)
 middleframe.pack(fill="both")#side="top", fill="both", expand=True)
-left = tk.Frame(middleframe, width=500,height=950, bg="blue", bd=1, relief=SOLID)
+left = tk.Frame(middleframe, width=500,height=950, bd=1, relief=SOLID)
 left.columnconfigure(3,weight=1)
 #left.columnconfigure(1,weight=1)
 middleframe.paneconfig(left, minsize=500)
-right = tk.Frame(middleframe, width =1154,height=950, bg="red",bd=1,relief=SOLID)
+right = tk.Frame(middleframe, width =1154,height=950, bg="#1B8A94",bd=1,relief=SOLID)
 middleframe.paneconfig(right, minsize=1154)
 middleframe.add(left)
 middleframe.add(right)
