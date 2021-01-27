@@ -122,6 +122,22 @@ class Chamber:
             status = "There are no open QN's\n"
         return status
 
+    def getSortedQNsForReport(self):
+        YIs = []
+        Y7s = []
+        Y8s = []
+        for i in range(3):
+            if self.allQNs[i]:
+                for qn in self.allQNs[i]:
+                    if qn.isOpen:
+                        if qn.Type == "YI":
+                            YIs.append(qn)
+                        elif qn.Type == "Y7":
+                            Y7s.append(qn)
+                        else:
+                            Y8s.append(qn)
+        return YIs + Y7s + Y8s
+
 #Currently unused, here in case needed when merging extended bays
 class Port:
     def __init__ (self, portName, occupied, chamber, chamberPO, chamberType):
@@ -272,6 +288,7 @@ def createDriver(hide):
 #                                                                                #
 ##################################################################################
 #Find PO's for a lst of chamber by looking through "Test Queue" file maintained by MDP Test DTF
+#TODO remove all spaces before checking 
 def getPOs(chambers):
     global dfCrossover
     global df
@@ -416,14 +433,17 @@ def getERackStatus(chamber):
                 status = "\nComments:\n" + row[12].value
             except:
                 pass
-    if missingRacks:
-        #print("Rack status: Missing " + ', '.join(missingRacks) + " for " + system + "." + status)
-        #return ("Rack status: Missing " + ', '.join(missingRacks) + " for " + system + "." + status)
-        chamber.rackStatus = ("Rack status: Missing " + ', '.join(missingRacks) + " for " + system + "." + status)
+    if found:
+        if missingRacks:
+            #print("Rack status: Missing " + ', '.join(missingRacks) + " for " + system + "." + status)
+            #return ("Rack status: Missing " + ', '.join(missingRacks) + " for " + system + "." + status)
+            chamber.rackStatus = ("Rack status: Missing " + ', '.join(missingRacks) + " for " + system + "." + status)
+        else:
+            #print("Rack status: All racks complete for " + system + ".")
+            #return ("Rack status: All racks complete for " + system + ".")
+            chamber.rackStatus = ("Rack status: All racks complete for " + system + ".")
     else:
-        #print("Rack status: All racks complete for " + system + ".")
-        #return ("Rack status: All racks complete for " + system + ".")
-        chamber.rackStatus = ("Rack status: All racks complete for " + system + ".")
+        chamber.rackStatus = ("No EQRK found for " + system + ".")
 
 #Gets and displays erack data for given system in a new window
 def printStatus(system):
@@ -857,6 +877,7 @@ def viewQN(ch, onlyOpen, qnId):
 ##################################################################################
 def updateAllDataForAllPorts(bay, sectionTexts, statusTexts, updateTimeText, percentTexts):
     global floorDataUpdated
+    global bayDataUpdated
     driver = createDriver(True)
     start = time.time()
     for b in bays[1:]:
@@ -878,6 +899,7 @@ def updateAllDataForAllPorts(bay, sectionTexts, statusTexts, updateTimeText, per
     drawMayanStatus(bay, sectionTexts, statusTexts, updateTimeText)
     driver.quit()
     floorDataUpdated = [True, datetime.now().strftime("%m/%d/%Y %I:%M%p")]
+    bayDataUpdated = [True, datetime.now().strftime("%m/%d/%Y %I:%M%p")]
 
 
 def updateAllQNsForAllPorts(bay_num, driver):
@@ -1267,7 +1289,8 @@ def generateFloorReport():
                             pass
                         result = result + "Passdown: " + chStatus + "\nMayan Status: " + ch.currentMayanSection + "\n"
                         result = result + ch.rackStatus + "\n\n   QNs:\n"
-                        for qn in ch.QNs:
+                        sortedQNs = ch.getSortedQNsForReport()
+                        for qn in sortedQNs:
                             if qn.isOpen:
                                 result = result + "\t" + qn.print()
                                 if qn.lastScanned:
@@ -1289,7 +1312,7 @@ def generateFloorReport():
 def generateBayReport(bay):
     global bayDataUpdated
     ports = ["A", "B", "C", "D", "E", "F", "G", "H"]
-    if bayDataUpdated[0]:
+    if bayDataUpdated[0] or floorDataUpdated[0]:
         print(bayDataUpdated[1])
         with open("Bay" + str(bay) + "Report.txt", "w") as bayReport:
             result = "Data Updated " + bayDataUpdated[1] + "\n"
@@ -1306,7 +1329,8 @@ def generateBayReport(bay):
                             pass
                         result = result + "Passdown: " + chStatus + "\nMayan Status: " + ch.currentMayanSection + "\n"
                         result = result + ch.rackStatus + "\n\n   QNs:\n"
-                        for qn in ch.QNs:
+                        sortedQNs = ch.getSortedQNsForReport()
+                        for qn in sortedQNs:#wasch.QNs
                             if qn.isOpen:
                                 result = result + "\t" + qn.print()
                                 if qn.lastScanned:
@@ -1324,6 +1348,32 @@ def generateBayReport(bay):
     else:
         print("Please update all bay data")
 
+
+def generateY7Report():
+    global floorDataUpdated
+    if floorDataUpdated[0]:
+        with open("Y7Report.txt", "w") as report:
+            result = "Data Updated " + floorDataUpdated[1] + "\n"
+            for b in bays[1:]:
+                result = result + "-----------------------------------------------------------\n" + "Bay " + str(b.bayNumber) + "\n-----------------------------------------------------------\n"
+                for ch in b.chambers:
+                    if ch.system != "XXXXX-X":
+                        closedQNs = ""
+                        result = result + ch.port + ":\n" + ch.system + " (" + ch.chType + ") " + "PO: " + ch.chPO + " \n"
+                        sortedQNs = ch.getSortedQNsForReport()
+                        for qn in sortedQNs:
+                            if qn.Type == "Y7":
+                                result = result + qn.print()
+                        result = result + "\n"
+                        for il in ch.InspLots:
+                            result = result + il.print()
+                        result = result + "\n"
+                    else:
+                        result = result + ch.port + ": " + "Empty\n\n"
+            report.write(result)
+            print("Floor report generated")
+    else:
+        print("Please udpate all data")
 
 
 ############################################################ MAIN PROGRAM BEGINS ########################################################################
@@ -1405,7 +1455,8 @@ manualPOs = load_workbook(manualPOsFile)
 ws = manualPOs.active
 rows = list(ws.rows)
 for i in range(66):
-    if df.at[i, "System #"].strip() != manualDF.at[i, "System"]:
+    sys = df.at[i, "System #"].replace(" ", "").split("\n")
+    if sys[0] != manualDF.at[i, "System"]:#was df.at[i, "System #"].strip()
         for x in range(2,6):
             ws.cell(column=x, row=i + 2, value="")
 manualPOs.save(r'\\amat.com\Folders\Austin\Global-Ops\AMO\CPI_TestWorkCntr\TECH FOLDERS\ Irvin Carrillo\ManualPOsUnited.xlsx')
@@ -1507,6 +1558,12 @@ updateAllDataForBayButton = tk.Button(topframe, text = "Update all data for bay"
 updateAllDataForBayButton.grid(row = 0, column = 6, sticky = "nsew")
 generateBayReportButton = tk.Button(topframe, text = "Generate Bay Report", command = (lambda: generateBayReport(bay_num)))
 generateBayReportButton.grid(row = 0, column = 7, sticky = "nsew")
+try:
+    if "true" in d["y7reportenable"].strip().lower():
+        generateY7ReportButton = tk.Button(topframe, text = "Generate Y7 Report", command = (lambda: generateY7Report()))
+        generateY7ReportButton.grid(row = 0, column = 8, sticky = "nsew")
+except:
+    print("Warning: need update to config file")
 rackStatusEntry = tk.Entry(topframe)
 rackStatusEntry.grid(row = 1, column = 2, sticky = "nsew")
 rackStatusButton = tk.Button(topframe, text = "Check ERack status for system", command = (lambda: printStatus(rackStatusEntry.get().upper())))
